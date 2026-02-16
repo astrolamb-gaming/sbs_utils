@@ -206,6 +206,42 @@ def suppress_client_connect_dialog(on_off_flag: int) -> None:
     """turns on (or off) the client connect dialog on the server (arg is 1 or 0)"""
 def transparent_options_button(clientID: int, on_off_flag: int) -> None:
     """for a specific client (0=server machine), turns on (or off) the Options button transparency (arg is 1 or 0)"""
+class DIPLOMANCY(object): ### from pybind
+    """
+    Enum of diplomancy relationships.
+
+    Members:
+        UNKNOWN : the side is unknown
+        NEUTRAL : the sides are neutral
+        ALLIED : the sides are allied
+        HOSTILE : the sides are hostile
+    """
+    def __eq__(self: object, other: object) -> bool:
+        ...
+    def __getstate__(self: object) -> int:
+        ...
+    def __hash__(self: object) -> int:
+        ...
+    def __index__(self: sbs.SHPSYS) -> int:
+        ...
+    def __init__(self: sbs.SHPSYS, value: int) -> None:
+        ...
+    def __int__(self: sbs.SHPSYS) -> int:
+        ...
+    def __ne__(self: object, other: object) -> bool:
+        ...
+    def __repr__(self: object) -> str:
+        ...
+    def __setstate__(self: sbs.SHPSYS, state: int) -> None:
+        ...
+    def __str__(*argv):
+        """name(self: handle) -> str"""
+    @property
+    def name name(self: handle) -> str:
+        """name(self: handle) -> str"""
+    @property
+    def value (arg0: sbs.SHPSYS) -> int:
+        ...
 class SHPSYS(object): ### from pybind
     """One of four ship systems to track damage
     
@@ -598,6 +634,25 @@ class simulation(object): ### from pybind
         """returns true if the navproxy exists, by integer id"""
     def reposition_space_object(self: sbs.simulation, arg0: sbs.space_object, arg1: float, arg2: float, arg3: float) -> None:
         """immediately changes the position of a spaceobject"""
+    def set_diplomacy_color(self: simulation, diplomacyEnumValue: DIPLOMANCY, colorString: str) -> None:
+        """
+        Set the color associated with a diplomancy relationship (like sbs.DIPLOMACY.UNKNOWN or sbs.DIPLOMACY.ALLIED)
+        """
+
+    def set_side_icon_color(self: simulation, SideTag: str, colorString: str) -> None:
+        """
+        Set the color of a SideTag, (like TSN or Raider)
+        """
+
+    def set_side_relationship(self: simulation, FirstSideTag: str, SecondSideTag: str, diplomacyEnumValue: DIPLOMANCY) -> None:
+        """
+        Set the relationship between two sides, given the tags associated with the sides.
+        Args:
+            FirstSideTag: string tag of the first side
+            SecondSideTag: string tag of the second side
+            diplomacyEnumValue: diplomancy enum value of the relationship between the sides (UNKNOWN, NEUTRAL, ALLIED, HOSTILE)
+        """
+
     def set_navproxy_pos(self: sbs.simulation, navproxy: sbs.navproxy, x: float, y: float, z: float) -> None:
         """takes a navproxy (the reference, not the ID), and sets the xyz values"""
     def space_object_exists(self: sbs.simulation, arg0: int) -> bool:

@@ -307,6 +307,23 @@ class TORPEDO(object): ### from pybind
     MINE : 3
     NUKE : 1
     TORPTYPECOUNT : 4
+
+class DIPLOMANCY(Enum): ### from pybind
+    """
+    Enum of diplomancy relationships.
+
+    Members:
+        UNKNOWN : the side is unknown
+        NEUTRAL : the sides are neutral
+        ALLIED : the sides are allied
+        HOSTILE : the sides are hostile
+    """
+    UNKNOWN : 0
+    NEUTRAL : 1
+    ALLIED : 2
+    HOSTILE: 3
+
+
 class Writer(object): ### from pybind
     """class Writer"""
     def flush(self: Writer) -> None:
@@ -734,6 +751,25 @@ class simulation(object): ### from pybind
             arg0.pos.x = arg1
             arg0.pos.y = arg2
             arg0.pos.z = arg3
+
+    def set_diplomacy_color(self: simulation, diplomacyEnumValue: DIPLOMANCY, colorString: str) -> None:
+        """
+        Set the color associated with a diplomancy relationship (like sbs.DIPLOMACY.UNKNOWN or sbs.DIPLOMACY.ALLIED)
+        """
+
+    def set_side_icon_color(self: simulation, SideTag: str, colorString: str) -> None:
+        """
+        Set the color of a SideTag, (like TSN or Raider)
+        """
+
+    def set_side_relationship(self: simulation, FirstSideTag: str, SecondSideTag: str, diplomacyEnumValue: DIPLOMANCY) -> None:
+        """
+        Set the relationship between two sides, given the tags associated with the sides.
+        Args:
+            FirstSideTag: string tag of the first side
+            SecondSideTag: string tag of the second side
+            diplomacyEnumValue: diplomancy enum value of the relationship between the sides (UNKNOWN, NEUTRAL, ALLIED, HOSTILE)
+        """
 
     def space_object_exists(self: simulation, arg0: int) -> bool:
         """returns true if the spaceobject exists, by ID"""
