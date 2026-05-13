@@ -19,14 +19,26 @@ Schedulers are responsible for running **Tasks** for their respective client. Ta
 When events arrive from the engine, sbs_utils handles them and passes them to the appropriate Dispatcher. Several dispatchers can trigger tasks, which are handled via routes within {{ab.m}}. Ultimately, the StoryPage's Scheduler is *ticked*, which in turn ticks all of its Tasks. For a given event, Schedulers are ticked multiple times to allow the system to fully respond to changes produced by running Tasks.
 
 ```mermaid
-eventmodeling
+graph TD
+    EE["Engine Event"]
+    CEH["cosmos_event_handler\n(sbs_utils)"]
 
-tf 01 evt Engine.Event
-tf 02 evt SBSUtils.cosmos_event_handler { Sending to a number of dispatchers }
-tf 03 evt MAST.StoryPage { From the GUI Dispatcher or Tick Dispatcher }
-tf 04 evt MAST.MastScheduler
-tf 05 evt MAST.MastTask
+    EE --> CEH
+
+    CEH --> GUI["GUI\nDispatcher"]
+    CEH --> TICK["Tick\nDispatcher"]
+    CEH --> GRID["Other Dispatchers\nGrid, Lifetime, etc."]
+    
+    GUI --> SP["StoryPage"]
+    TICK --> SP
+    SP --> MS["MastScheduler"]
+    MS --> MT1["MastTask"]
+    MS --> MT2["MastTask"]
+    MS --> MT3["MastTask ..."]
+
+    GRID --> DT["MastTask"]
 ```
+
 
 A Task runs until it completes, or until it returns a **PollResult** that pauses execution — resuming from that point the next time the Task is ticked.
 

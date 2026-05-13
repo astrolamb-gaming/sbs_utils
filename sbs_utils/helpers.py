@@ -5,6 +5,10 @@ import sys
 from  .agent import Agent
 
 class Context:
+    """Context for a given event frame
+    Allows the system to be abstracted or overridden
+    For example, Mock sim and sbs for testing
+    """
     def __init__(self, sim, _sbs, _event):
         self.sim = sim
         self.sbs = _sbs
@@ -26,6 +30,11 @@ class FrameContextMeta(type):
 
     @property
     def page(self):
+        """returns the GUI Page related to the currently executing task.
+
+        The can change can change often for a given frame. As each task is ticked. It set the FrameContext Page.
+        Other parts of the system may also temporary set the FrameContext.task and FrameContext.page during execution.
+        """
         if self._page is None:
             gui = Agent.get(self.client_id)
             if gui is not None:
@@ -34,6 +43,9 @@ class FrameContextMeta(type):
     
     @property
     def server_page(self):
+        """returns the GUI Page related to the server i.e. client_id==0.
+        This should always return the server's page
+        """
         gui = Agent.get(0)
         if gui is not None:
             return gui.page
@@ -41,6 +53,11 @@ class FrameContextMeta(type):
     
     @property
     def client_page(self):
+        """returns the GUI Page related to the current event's client_id.
+        This should always return the that client's page.
+        This can be different from the FrameContext.page
+        """
+
         gui = Agent.get(self.client_id)
         if gui is not None:
             return gui.page
@@ -48,6 +65,9 @@ class FrameContextMeta(type):
     
     @property
     def server_task(self):
+        """returns the main task for GUI Page related to the server i.e. client_id==0.
+        This should always return the server's main task
+        """
         gui = Agent.get(0)
         if gui is not None:
             return gui.page.gui_task
@@ -55,6 +75,8 @@ class FrameContextMeta(type):
     
     @property
     def client_task(self):
+        """returns the main task for GUI Page related to this frame event's client_id.
+        """
         gui = Agent.get(self.client_id)
         if gui is not None and gui.page is not None:
             return gui.page.gui_task
@@ -62,12 +84,17 @@ class FrameContextMeta(type):
     
     @property
     def client_id(self):
+        """returns the frame event's client_id.
+        """
         if self.context is None or self.context.event is None:
             return 0
         return self.context.event.client_id
     
     @page.setter
     def page(self,value):
+        """ Allows overriding the page, set internally
+        e.g. when a new task is executing the FrameContext.page should be the page for that task.
+        """
         self._page = value
 
     @property
@@ -80,11 +107,17 @@ class FrameContextMeta(type):
     
     @task.setter
     def task(self,value):
+        """ Allows overriding the task, set internally
+        e.g. when a new task is executing the FrameContext.task is set to that task.
+        """
         self._task = value
 
 
     @property
     def sim(self):
+        """ Returns the sim for the from
+        This abstract exist to allow testing, etc.
+        """
         return self.context.sim
 
     @property
