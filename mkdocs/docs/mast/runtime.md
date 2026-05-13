@@ -25,18 +25,20 @@ graph TD
 
     EE --> CEH
 
-    CEH --> GUI["GUI\nDispatcher"]
     CEH --> TICK["Tick\nDispatcher"]
+    CEH --> GUI["GUI\nDispatcher"]
     CEH --> GRID["Other Dispatchers\nGrid, Lifetime, etc."]
-    
-    GUI --> SP["StoryPage"]
-    TICK --> SP
-    SP --> MS["MastScheduler"]
+
+    TICK --> MS["MastScheduler\n(in StoryPage)"]
+    TICK --> SYS["Other Systems\nBrain, Objective, etc."]
+    GUI -->MS
     MS --> MT1["MastTask"]
     MS --> MT2["MastTask"]
     MS --> MT3["MastTask ..."]
 
     GRID --> DT["MastTask"]
+    SYS --> DT2["MastTask"]
+    
 ```
 
 
