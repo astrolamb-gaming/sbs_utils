@@ -6,7 +6,7 @@ The Python environment in {{ab.ac}} is single-threaded and runs only on the serv
 
 The {{ab.m}} runtime creates a pseudo multi-process, pseudo multi-threaded system within this single Python thread.
 
-{{ab.m}} is built on top of **sbs_utils**, a lower-level Python system that receives events from the {{ab.ac}} engine and routes them to a set of **Dispatcher** systems. For more detail, refer to [sbs_utils](/sbs_utils).
+{{ab.m}} is built on top of **sbs_utils**, a lower-level Python system that receives events from the {{ab.ac}} engine and routes them to a set of **Dispatcher** systems. For more detail, refer to [sbs_utils](/sbs_utils/sbs_utils/).
 
 ---
 
