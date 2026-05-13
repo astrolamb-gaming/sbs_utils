@@ -47,6 +47,7 @@ def torpedo_type(
             * standard - the default behavior of damaging a single target upon hit.
             * blast - creates an area of effect with diminishing effects as the distance from the blast epicenter increases.
             * reduce_shields - reduces the shields of the target(s). (EMP)
+
         blast_radius (int, optional): How large the area of effect should be, if `warhead` has the type "blast". Default is 1000.
         damage (int, optional): The base damage dealt to the target. If `warhead` has the type "blast", damage decreases depending on the distance from the blast's epicenter. Default is 5.
         explosion_size (int, optional): The size of the explosion visual effect on the 3d view. Default is 10.
@@ -54,6 +55,7 @@ def torpedo_type(
         behaviour (str, optional): The behavior of the torpedo guidance system. Default is homing.
             * homing - the torpedo will home in on its target, compensating for movement.
             * mine - the torpedo will not move after it has been placed and will detonate when a ship gets close.
+
         energy_conversion_value (int, optional): The amount of energy to provide to the ship by disassembling the torpedo. Default is 100.
         other (str, optional): Additional arguments to add, using the format "key1:value1;key2:value2;"
     """
@@ -72,6 +74,29 @@ def torpedo_type_string(key:str, string:str):
     """
     Define a torpedo type using the values specified in the string. Values that are not included will use default values.
     E.g. if you use `torpedo_type_string("SomeTorp","gui_text:Type 42;damage:12")`, it will make a homing torpedo called the Type 42 that does 12 damage, and all the other values will be identical to a regular homing torpedo.
+    
+    The string can contain these attribute names:
+        gui_text (str, optional): The name of the torpedo as seen by the players. If None, then will be the same as the key.
+        speed (int, optional): The speed at which the torpedo moves. Default is 10.
+        lifetime (int, optional): How long (in seconds) the torpedo continues to move. Default is 25.
+        flare_color (str, optional): The color of the torpedo's exhuast flare. Default is white.
+        trail_color (str, optional): The color of the torpedo's exhaust trail. Default is white.
+        warhead (str, optional): A comma-separated string defining the behavior of the warhead upon contact. Default is standard.
+            * standard - the default behavior of damaging a single target upon hit.
+            * blast - creates an area of effect with diminishing effects as the distance from the blast epicenter increases.
+            * reduce_shields - reduces the shields of the target(s). (EMP)
+
+        blast_radius (int, optional): How large the area of effect should be, if `warhead` has the type "blast". Default is 1000.
+        damage (int, optional): The base damage dealt to the target. If `warhead` has the type "blast", damage decreases depending on the distance from the blast's epicenter. Default is 5.
+        explosion_size (int, optional): The size of the explosion visual effect on the 3d view. Default is 10.
+        explosion_color (str, optional): The color of the explosion visual effect on the 3d view. Default is "fire".
+        behaviour (str, optional): The behavior of the torpedo guidance system. Default is homing.
+            * homing - the torpedo will home in on its target, compensating for movement.
+            * mine - the torpedo will not move after it has been placed and will detonate when a ship gets close.
+
+        energy_conversion_value (int, optional): The amount of energy to provide to the ship by disassembling the torpedo. Default is 100.
+        other (str, optional): Additional arguments to add, using the format "key1:value1;key2:value2;"
+    
     Args:
         key (str): The key by which the torpodo is identified.
         string (str): The torpedo value string containing any non-default values.
@@ -136,6 +161,117 @@ def get_torp_string_value_dict(key:str)->dict:
     torp = get_torp_value_string(key)
     return parse_torp_string(torp)
 
+def torp_update_value(key:str, attribute_name:str, value:str|int):
+    """
+    Update one attribute of a specified torpedo type.  
+    Possible attibute names:  
+        key (str): The key by which the torpodo is identified.  
+        gui_text (str, optional): The name of the torpedo as seen by the players. If None, then will be the same as the key.  
+        speed (int, optional): The speed at which the torpedo moves. Default is 10.  
+        lifetime (int, optional): How long (in seconds) the torpedo continues to move. Default is 25.  
+        flare_color (str, optional): The color of the torpedo's exhuast flare. Default is white.  
+        trail_color (str, optional): The color of the torpedo's exhaust trail. Default is white.  
+        warhead (str, optional): A comma-separated string defining the behavior of the warhead upon contact. Default is standard.  
+            * standard - the default behavior of damaging a single target upon hit.  
+            * blast - creates an area of effect with diminishing effects as the distance from the blast epicenter increases.  
+            * reduce_shields - reduces the shields of the target(s). (EMP)  
+  
+        blast_radius (int, optional): How large the area of effect should be, if `warhead` has the type "blast". Default is 1000.  
+        damage (int, optional): The base damage dealt to the target. If `warhead` has the type "blast", damage decreases depending on the distance from the blast's epicenter. Default is 5.  
+        explosion_size (int, optional): The size of the explosion visual effect on the 3d view. Default is 10.  
+        explosion_color (str, optional): The color of the explosion visual effect on the 3d view. Default is "fire".  
+        behaviour (str, optional): The behavior of the torpedo guidance system. Default is homing.  
+            * homing - the torpedo will home in on its target, compensating for movement.  
+            * mine - the torpedo will not move after it has been placed and will detonate when a ship gets close.  
+  
+        energy_conversion_value (int, optional): The amount of energy to provide to the ship by disassembling the torpedo. Default is 100.  
+        other (str, optional): Additional arguments to add, using the format "key1:value1;key2:value2;"  
+    
+    Args:
+        key (str): The key of the torpedo to modify.
+        attribute_name (str): The name of the attribute to modify
+        value (str): The new value for the attribute
+    """
+    torp = get_torp_string_value_dict(key)
+    torp[attribute_name] = value
+    torp_string = ""
+    for attr, val in torp.items():
+        torp_string += f"{attr}:{val};"
+    FrameContext.context.sbs.set_shared_string(key, torp_string)
+
+def torp_get_attribute_value(key:str, attribute_name:str) -> str:
+    """
+    Get the value of one attribute of a specified torpedo type.
+        Possible attibute names:  
+        key (str): The key by which the torpodo is identified.  
+        gui_text (str, optional): The name of the torpedo as seen by the players. If None, then will be the same as the key.  
+        speed (int, optional): The speed at which the torpedo moves. Default is 10.  
+        lifetime (int, optional): How long (in seconds) the torpedo continues to move. Default is 25.  
+        flare_color (str, optional): The color of the torpedo's exhuast flare. Default is white.  
+        trail_color (str, optional): The color of the torpedo's exhaust trail. Default is white.  
+        warhead (str, optional): A comma-separated string defining the behavior of the warhead upon contact. Default is standard.  
+            * standard - the default behavior of damaging a single target upon hit.  
+            * blast - creates an area of effect with diminishing effects as the distance from the blast epicenter increases.  
+            * reduce_shields - reduces the shields of the target(s). (EMP)  
+  
+        blast_radius (int, optional): How large the area of effect should be, if `warhead` has the type "blast". Default is 1000.  
+        damage (int, optional): The base damage dealt to the target. If `warhead` has the type "blast", damage decreases depending on the distance from the blast's epicenter. Default is 5.  
+        explosion_size (int, optional): The size of the explosion visual effect on the 3d view. Default is 10.  
+        explosion_color (str, optional): The color of the explosion visual effect on the 3d view. Default is "fire".  
+        behaviour (str, optional): The behavior of the torpedo guidance system. Default is homing.  
+            * homing - the torpedo will home in on its target, compensating for movement.  
+            * mine - the torpedo will not move after it has been placed and will detonate when a ship gets close.  
+  
+        energy_conversion_value (int, optional): The amount of energy to provide to the ship by disassembling the torpedo. Default is 100.  
+        other (str, optional): Additional arguments to add, using the format "key1:value1;key2:value2;"  
+    
+    Args:
+        key (str): The key of the torpedo to query.
+        attribute_name (str): The name of the attribute to query.
+    Returns:
+        str: The value of the attribute for that torpedo type. If the torpedo type or attribute does not exist, then None is returned.
+    """
+    torp = get_torp_string_value_dict(key)
+    return torp.get(attribute_name)
+
+# NOTE: Since as far as I've been able to determine, there's no way to get a list of all torpedoes 
+# defined on the server without somehow parsing the whole shared string, I figured being able to 
+# at least get all the ones for a given ship would be helpful.
+def torpedo_get_count_for_ship(id, key) -> tuple[int,int]:
+    """
+    Get the count and the maximum of the specified torpedo type for the ship.
+    Args:
+        id (int | Agent): The ship
+        key (str): The key representing the torpedo type.
+    Returns:
+        tuple[int,int]: The number of torpedoes and the maximum number of those torpdoes that can fit on the ship. If the torpedo type is not available to the ship, then (0,0) is returned.
+    """
+    obj = to_object(id)
+    if obj is not None:
+        count = get_data_set_value(id, f"{key}_NUM")
+        if count is None:
+            count = 0
+        max = get_data_set_value(id, f"{key}_MAX")
+        if max is None:
+            max = 0
+        return (count, max)
+    return (0,0)
+
+def torpedo_get_available_types_for_ship(id) -> list[str]:
+    """
+    Get a list of the keys for all the torpedo types currently available to a player ship.
+    Args:
+        id (int | Agent): The id of the ship, or the Agent representing it.
+    Returns:
+        list[str]: The list of torpedo keys.
+    """
+    obj = to_object(id)
+    if obj is not None:
+        types = get_data_set_value(id,"torpedo_types_available")
+        if isinstance(types, str):
+            type_list = types.split(",")
+            return type_list
+    return list()
 
 def torpedo_make_available(id, key:str, count:int=0) -> None:
     """
