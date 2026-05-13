@@ -58,6 +58,7 @@ nav:
     - Agent Model: mast/model.md
     - Syntax: mast/syntax.md
     - Prefabs: mast/prefabs.md
+    - Runtime: mast/runtime.md
     - AI:
       - mast/ai/index.md
       - Simple AI: mast/ai/simple.md

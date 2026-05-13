@@ -81,6 +81,9 @@ The flow of {{ab.m}} is similar to the original BASIC programming language. The 
 
 {{ab.m}} can "pause" execution and yield control back to the engine. The engine keeps calling {{ab.m}} and it yields until the condition is met then the flow can continue.
 
+??? note "More details"
+    For more details go to [**the {{ab.m}} Runtime**](/mast/runtime/) 
+
 This example prints "Hello, world" and five seconds later it prints "Goodbye". During that five seconds the engine is able to run because {{ab.m}} yields control back since it cannot move forward.
 
 This ability to yield control back to the engine is a reason that {{ab.m}} flow can be enable users to focus on the flow of the story and not how to get the programming language to deal with this.
@@ -252,7 +255,7 @@ While labels start with ===, sub labels start with at least 3 dashes ---. They c
 
     ```             
 
-See the [Secret Meeting mission](https://github.com/artemis-sbs/SecretMeeting/blob/main/SecretMaps/ambassador_ship.mast) for an example that demonstrates good use of indention and sub_labels.
+See the [Secret Meeting mission](https://github.com/artemis-sbs/SecretMeeting/blob/main/story.mast) for an example that demonstrates good use of indention and sub_labels.
 
 ??? note "This is an updated secret meeting"
     The link is to git hub copy of Secret Meeting and may be different than the shipped version.The code was updated to use as this example.
