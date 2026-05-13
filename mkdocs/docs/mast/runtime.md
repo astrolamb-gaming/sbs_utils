@@ -36,9 +36,9 @@ graph TD
     MS --> MT2["MastTask"]
     MS --> MT3["MastTask ..."]
 
-    GRID --> DT["MastTask"]
+    GRID --> RT["Route\nHandlers"]
+    RT --> DT["MastTask"]
     SYS --> DT2["MastTask"]
-    
 ```
 
 
