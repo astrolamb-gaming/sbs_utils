@@ -140,3 +140,24 @@ Sub-tasks share the Inventory of the Task that scheduled them — more specifica
 
 Any data passed directly to a sub-task becomes variables unique to that sub-task. All other variables belong to the root task's Inventory.
 
+---
+
+## {{ab.m}} startup
+
+In {{ab.m}}, a **Page** refers to a GUI Page. The StoryPage is the concrete implementation of a Page. The StoryPage is always the same page instance, using a layout system with a swapping mechanism triggered by `await gui()`.
+
+The server and each client have their own StoryPage. When a StoryPage is initialized it:
+
+1. Loads and compiles a MAST script file. The compilation is performed once by the server and the result is reused by all clients.
+2. Starts the Scheduler and main GUI Task for that client.
+3. Runs all top-level code in the script; the code before any labels. Note that Shared-scoped values are only initialized once, regardless of how many clients run the script.
+4. Jumps to the labels assigned via the reroute functions.
+
+When in the top-level area of the script, `gui_reroute_server()` and `gui_reroute_clients()` set the starting labels for the server and clients respectively. This tells each Scheduler where to begin execution. For example:
+
+```python
+gui_reroute_server("start_server")
+gui_reroute_clients("client_main")
+```
+
+This pattern is used in `server_console.mast` to direct the server and all clients to their respective entry points when the StoryPage initializes.
