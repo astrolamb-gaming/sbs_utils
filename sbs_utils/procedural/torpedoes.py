@@ -237,6 +237,7 @@ def torp_get_attribute_value(key:str, attribute_name:str) -> str:
 # NOTE: Since as far as I've been able to determine, there's no way to get a list of all torpedoes 
 # defined on the server without somehow parsing the whole shared string, I figured being able to 
 # at least get all the ones for a given ship would be helpful.
+# Follow up NOTE: With the new prefab implementation for torps, we can use role("torpedo_definition")
 def torpedo_get_count_for_ship(id, key) -> tuple[int,int]:
     """
     Get the count and the maximum of the specified torpedo type for the ship.
@@ -269,11 +270,11 @@ def torpedo_get_available_types_for_ship(id) -> list[str]:
     if obj is not None:
         types = get_data_set_value(id,"torpedo_types_available")
         if isinstance(types, str):
-            type_list = types.split(",")
+            type_list = types.strip().strip(",").split(",") # remove trailing comma if present
             return type_list
     return list()
 
-def torpedo_make_available(id, key:str, count:int=0) -> None:
+def torpedo_make_available(id, key:str, count:int=0, fill:bool=True) -> None:
     """
     Make a torpedo type available to a player ship. The torpedo type must be defined using `torpedo_type()` or `torpedo_type_string()` before it can be made available.
     Args:
@@ -287,12 +288,14 @@ def torpedo_make_available(id, key:str, count:int=0) -> None:
         if types is None:
             types = ""
         if isinstance(types, str):
-            type_list = types.split(",")
+            type_list = types.strip().strip(",").split(",")# remove trailing comma if present
             if key not in type_list:
                 type_list.append(key)
                 new_types = ",".join(type_list)
                 set_data_set_value(id,"torpedo_types_available", new_types)
-                set_data_set_value(id, f"{key}_NUM", count)
+                set_data_set_value(id, f"{key}_MAX", count)
+                if fill: # Set count to max number
+                    set_data_set_value(id, f"{key}_NUM", count)
 
 def torpedo_make_unavailable(id, key:str) -> None:
     """
@@ -307,7 +310,7 @@ def torpedo_make_unavailable(id, key:str) -> None:
         if types is None:
             types = ""
         if isinstance(types, str):
-            type_list = types.split(",")
+            type_list = types.strip().strip(",").split(",") # remove trailing comma if present
             if key in type_list:
                 type_list.remove(key)
                 new_types = ",".join(type_list)
