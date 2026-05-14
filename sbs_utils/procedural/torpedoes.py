@@ -273,7 +273,7 @@ def torpedo_get_available_types_for_ship(id) -> list[str]:
             return type_list
     return list()
 
-def torpedo_make_available(id, key:str, count:int=0) -> None:
+def torpedo_make_available(id, key:str, count:int=0, fill:bool=True) -> None:
     """
     Make a torpedo type available to a player ship. The torpedo type must be defined using `torpedo_type()` or `torpedo_type_string()` before it can be made available.
     Args:
@@ -292,7 +292,9 @@ def torpedo_make_available(id, key:str, count:int=0) -> None:
                 type_list.append(key)
                 new_types = ",".join(type_list)
                 set_data_set_value(id,"torpedo_types_available", new_types)
-                set_data_set_value(id, f"{key}_NUM", count)
+                set_data_set_value(id, f"{key}_MAX", count)
+                if fill: # Set count to max number
+                    set_data_set_value(id, f"{key}_NUM", count)
 
 def torpedo_make_unavailable(id, key:str) -> None:
     """
