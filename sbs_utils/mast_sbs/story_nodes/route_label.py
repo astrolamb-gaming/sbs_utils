@@ -139,6 +139,10 @@ class RouteDecoratorLabel(DecoratorLabel):
                 routes.route_damage_killed(self)
             case ["dock", "hangar"]: 
                 routes.route_dock_hangar(self)
+            case ["launch", "missile"]:
+                routes.route_launch_missile(self)
+            case ["launch", "drone"]:
+                routes.route_launch_drone(self)
             case ["shared", "signal", *b]: 
                 #
                 # This needs to run 

@@ -3,6 +3,7 @@ from .damagedispatcher import DamageDispatcher, CollisionDispatcher
 from .consoledispatcher import ConsoleDispatcher
 from .tickdispatcher import TickDispatcher
 from .lifetimedispatcher import LifetimeDispatcher
+from .launchdispatcher import LaunchDispatcher
 from .garbagecollector import GarbageCollector
 from .extra_dispatcher import HotkeyDispatcher, ClientStringDispatcher
 from .procedural.inventory import get_inventory_value, set_inventory_value
@@ -247,6 +248,16 @@ def cosmos_event_handler(sim, event):
                 #print_event(event)
                 CollisionDispatcher.dispatch_passive(event)
                 tick_the_rest(event)
+
+            case "player_launches_missile":
+                # print_event(event)
+                LaunchDispatcher.dispatch_missile(event)
+                tick_the_rest(event)
+
+            case "ship_launches_drone":
+                print_event(event)
+                LaunchDispatcher.dispatch_drone(event)
+                tick_the_rest(event)
             #TODO: Obsolete?
             case "passive_collision":
                 #print_event(event)
@@ -402,4 +413,4 @@ def cosmos_event_handler(sim, event):
 
 
 
-GridDispatcher, DamageDispatcher, CollisionDispatcher,ConsoleDispatcher, TickDispatcher, LifetimeDispatcher
+GridDispatcher, DamageDispatcher, CollisionDispatcher,ConsoleDispatcher, TickDispatcher, LifetimeDispatcher, LaunchDispatcher
