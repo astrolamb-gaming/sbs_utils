@@ -2,6 +2,7 @@ from ..consoledispatcher import ConsoleDispatcher
 from ..griddispatcher import GridDispatcher
 from ..lifetimedispatcher import LifetimeDispatcher
 from ..damagedispatcher import DamageDispatcher, CollisionDispatcher
+from ..launchdispatcher import LaunchDispatcher
 from .query import to_id, to_object
 from .inventory import get_inventory_value
 
@@ -854,6 +855,75 @@ def route_collision_interactive(label):
     """    
     return HandleCollision(CollisionDispatcher._INTERACTION, label)
 
+
+class HandleLaunch:
+    just_once = set()
+
+    def __init__(self, launch_type, label) -> None:
+        #
+        # Also avoid adding twice, e.g. each client can added the route
+        #
+        self.label = label
+        if not label in HandleLaunch.just_once:
+            self.label = label
+            HandleLaunch.just_once.add(label)
+            if launch_type == LaunchDispatcher.MISSILE:
+                LaunchDispatcher.add_missile(self.selected)
+            elif launch_type == LaunchDispatcher.DRONE:
+                LaunchDispatcher.add_drone(self.selected)
+        
+            
+    def selected(self, event):
+        # Run on the current task
+        task = FrameContext.server_task
+
+        launch_type = event.extra_extra_tag
+        if launch_type is None:
+            launch_type = "drone"
+        
+        t = task.start_task(self.label, {
+                "LAUNCH_SOURCE_ID": event.origin_id,
+                "LAUNCH_PARENT_ID": event.parent_id,
+                "LAUNCH_TARGET_ID": event.selected_id, # 0
+                "LAUNCH_ORIGIN_ID": event.origin_id,
+                "LAUNCH_SELECTED_ID": event.selected_id, # 0
+                "LAUNCH_TYPE": launch_type,
+                "EVENT": event,
+                "LAUNCH_ROUTED": True
+            })
+        t.tick_in_context()
+
+
+def route_launch_missile(label):
+    """called when player_launches_missile event occurs.
+
+    Note:
+        This is not intended for long running tasks
+
+    Args:
+        label (label): The label to run
+
+    Returns:
+        The route: Used rarely to cancel the route
+    """    
+    return HandleLaunch(LaunchDispatcher.MISSILE, label)
+
+
+def route_launch_drone(label):
+    """called when ship_launches_drone event occurs.
+
+    Note:
+        This is not intended for long running tasks
+
+    Args:
+        label (label): The label to run
+
+    Returns:
+        The route: Used rarely to cancel the route
+    """    
+    return HandleLaunch(LaunchDispatcher.DRONE, label)
+
+
 def route_change_console(label):
     """called when a  change console button is pressed.
 
@@ -1048,6 +1118,44 @@ class RouteDockHangar(RouteLifetime):
     """        
     def __init__(self, method):
         super().__init__(method, LifetimeDispatcher.DOCK)
+
+
+class RouteLaunchMissile(object):
+    """ decorator for routing to a python function or python class method
+
+    Note:
+        The route is expected to be a label
+
+    ??? Example
+        ``` py
+        @RouteLaunchMissile
+        @label
+        def handle_missile_launch():
+            ....
+            yield PollResults.OK_YIELD
+        ```
+    """        
+    def __init__(self, method):
+        HandleLaunch(LaunchDispatcher.MISSILE, method)
+
+
+class RouteLaunchDrone(object):
+    """ decorator for routing to a python function or python class method
+
+    Note:
+        The route is expected to be a label
+
+    ??? Example
+        ``` py
+        @RouteLaunchDrone
+        @label
+        def handle_drone_launch():
+            ....
+            yield PollResults.OK_YIELD
+        ```
+    """        
+    def __init__(self, method):
+        HandleLaunch(LaunchDispatcher.DRONE, method)
 
 
 class RouteConsole(object):
