@@ -255,7 +255,7 @@ def cosmos_event_handler(sim, event):
                 tick_the_rest(event)
 
             case "ship_launches_drone":
-                print_event(event)
+                # print_event(event)
                 LaunchDispatcher.dispatch_drone(event)
                 tick_the_rest(event)
             #TODO: Obsolete?
