@@ -158,7 +158,7 @@ In this example, the objective applies to one or more player ships.
 If the station is destroyed, the objective should fail.
 If the station is not destroyed, the objective should succeed.
 
-```mast
+````mast
 === objective_defend_station
 metadata: ```
 time_limit: 10 # minutes
@@ -199,7 +199,7 @@ station:
     else:
         modifier_add(OBJECTIVE_AGENT_ID, "reputation", -10, "Station Destroyed")
         sbs.play_music_file(0, "music/default/failure)
-```
+````
 
 
 ## Game end integration
