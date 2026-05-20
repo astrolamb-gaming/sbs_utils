@@ -145,16 +145,20 @@ This example pulls the earlier sections together into one screen: one outer sect
 
 ```python
 == settings_screen
+    # Defaults make the screen stable on first render and after resets.
     default status_text = "Adjust the settings, then apply them."
     default difficulty = "Normal"
     default friendly_fire = False
     default spawn_rate = 50
 
+    # One outer container for the whole settings UI.
     gui_section(style="area:10,10,90,90;padding:0.5em;")
 
+    # Header row.
     gui_row(style="row-height:2.2em;")
     gui_text(props="$text: Mission Settings")
 
+    # Left column: navigation/status.
     with gui_sub_section("col-width:35%;padding:0,0.5em,0,0;"):
         gui_row(style="row-height:1.6em;")
         gui_text(props="$text: Sections")
@@ -169,6 +173,7 @@ This example pulls the earlier sections together into one screen: one outer sect
         gui_row()
         gui_text_area(props=f"$text: {status_text}")
 
+    # Right column: editable settings controls.
     with gui_sub_section("col-width:65%;"):
         gui_row()
         gui_text(props="$text: Difficulty")
@@ -183,15 +188,18 @@ This example pulls the earlier sections together into one screen: one outer sect
         gui_slider(msg="0,100", var="spawn_rate")
 
         gui_row(style="row-height:2.2em;")
+        # Direct per-widget message handling for action buttons.
         on gui_message(gui_button("Apply")):
             jump apply_settings
         on gui_message(gui_button("Close")):
             jump close_settings
 
+    # Reactive update when a bound value changes.
     on change difficulty:
         status_text = f"Difficulty changed to {difficulty}."
         jump settings_screen
 
+    # External/shared event hook.
     on signal reset_settings:
         difficulty = "Normal"
         friendly_fire = False
@@ -199,17 +207,21 @@ This example pulls the earlier sections together into one screen: one outer sect
         status_text = "Settings reset from signal."
         jump settings_screen
 
+    # Activate queued layout and wait for interaction.
     await gui()
 
 == apply_settings
+    # Read back values from GUI task variables.
     current_difficulty = gui_get_variable("difficulty")
     current_friendly_fire = gui_get_variable("friendly_fire")
     current_spawn_rate = gui_get_variable("spawn_rate")
 
+    # Update status, then redraw the same screen.
     status_text = f"Applied: {current_difficulty}, FF={current_friendly_fire}, Spawn={current_spawn_rate}"
     jump settings_screen
 
 == close_settings
+    # In a real flow this would usually jump to another label/menu.
     status_text = "Settings screen closed."
     jump settings_screen
 ```
