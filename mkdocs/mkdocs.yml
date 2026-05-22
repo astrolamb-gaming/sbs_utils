@@ -73,6 +73,9 @@ nav:
       - Gui: mast/routes/gui.md
       - Signals: mast/routes/signals.md
       - Maps: mast/routes/maps.md
+    - World Building with MAST:
+      - mast/world_building/index.md
+      - Custom Torpedoes: mast/world_building/torpedoes.md
     
 
   - Cosmos:
