@@ -325,7 +325,7 @@ class Layout(Clickable):
         #     #self.representing = False
         #     return
         # el
-        print(f"Recalculating Layout")
+        # print(f"Recalculating Layout")
         # self.calc(event.client_id)
         # self.present(event)
         if not self._show:
@@ -644,7 +644,13 @@ class Layout(Clickable):
         row:Row
         for row in self.rows:
             # If the row is out of bounds, or this layout is hidden, then we hide the children.
-            row._is_shown = not is_out_of_bounds(row, self) and not self.is_hidden
+            if self.is_hidden:
+                row._is_shown = False
+            else:
+                row._is_shown = not is_out_of_bounds(row, self)
+                if row._is_shown:
+                    if row.bounds.is_on_boundary(self.bounds):
+                        row.bounds.clamp(self.bounds)
 
             # We still want to present all children, because if we don't, then we get ghost gui elements
             row.present(event)
@@ -742,22 +748,4 @@ class Layout(Clickable):
         row:Row
         for row in self.rows:
             row.on_begin_presenting(client_id)
-
-
-    def print_bounds(self, bounds=None):
-        if not bounds:
-            bounds = self.bounds
-        print(f"Left: {bounds.left}    Top: {bounds.top};   ")
-        print(f"Rigth: {bounds.right}    Bottom: {bounds.bottom}")
-
-
-
-
-        
-def debug_layout_structure(layout, depth=0):
-    pass
-#     layout_class = layout.__class__
-#     print(type(layout))
-#     print(layout_class)
-
 

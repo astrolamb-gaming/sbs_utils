@@ -172,6 +172,39 @@ class Bounds:
         self.right= max(b.right, self.right)
         self.bottom = max(b.bottom, self.bottom)
 
+
+    def clamp(self, b):
+        """
+        Clamp this bounds to fit inside the specified bounds.
+        """
+        if self.left < b.left:
+            self.left = b.left
+        if self.top < b.top:
+            self.top = b.top
+        if self.right > b.right:
+            self.right = b.right
+        if self.bottom > b.bottom:
+            self.bottom = b.bottom
+
+    def is_on_boundary(self, b):
+        """
+        Check if this bounds overlaps with the edge of another bounds.
+        
+        Args:
+            b (Bounds): The other bounds to check
+        Returns:
+            bool: True if the bounds overlap.
+        """
+        if self.left < b.left and self.right > b.left:
+            return True
+        if self.top < b.top and self.bottom > b.top:
+            return True
+        if self.right > b.right and self.left < b.right:
+            return True
+        if self.bottom > b.bottom and self.top < b.bottom:
+            return True
+        return False
+
 Bounds.hidden = Bounds(-1011,-1011, -999,-999)
 
 
@@ -222,31 +255,3 @@ def is_out_of_bounds(child, parent, tolerance=0.0):
     # if c_bounds.bottom < 0:
     #     return True
     return False
-
-class TestBounds:
-    bounds = None
-
-def test_oob():
-
-    # Left----Top----Right----Bottom
-    p = TestBounds()
-    p.bounds = Bounds(0,0,100,100)
-
-    c = TestBounds()
-    c.bounds = Bounds(110, 0, 120, 100)
-    if is_out_of_bounds(c,p):
-        print("FAIL 1")
-    
-    c.bounds = Bounds(0, -100, 100, -1)
-    if is_out_of_bounds(c,p):
-        print("FAIL 2")
-
-    c.bounds = Bounds(110, 0, 120, 100)
-    if is_out_of_bounds(c,p):
-        print("FAIL 3")
-
-    c.bounds = Bounds(-100, 0, -10, 100)
-    if is_out_of_bounds(c,p):
-        print("FAIL 4")
-
-MastGlobals.import_python_function(test_oob)
