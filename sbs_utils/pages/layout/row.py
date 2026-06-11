@@ -222,7 +222,15 @@ class Row:
         col:Column
         for col in self.columns:
             # If it's not in the bounds of its parent, or if the parent is not hidden, then set _is_shown to False.
-            col._is_shown = not is_out_of_bounds(col, self) and not self.is_hidden
+            if self.is_hidden:
+                col._is_shown = False
+            else:
+                col._is_shown = not is_out_of_bounds(col, self)
+                if col._is_shown:
+                    # Clamp the child's bounds to be within its parents' bounds if they overlap.
+                    if col.bounds.is_on_boundary(self.bounds):
+                        col.bounds.clamp(self.bounds)
+
             col.present(event)
         self._post_present(event)
 

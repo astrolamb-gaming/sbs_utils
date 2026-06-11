@@ -649,6 +649,7 @@ class Layout(Clickable):
             else:
                 row._is_shown = not is_out_of_bounds(row, self)
                 if row._is_shown:
+                    # Clamp the child's bounds to be within its parents' bounds if they overlap.
                     if row.bounds.is_on_boundary(self.bounds):
                         row.bounds.clamp(self.bounds)
 
