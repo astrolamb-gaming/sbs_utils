@@ -572,6 +572,21 @@ class Layout(Clickable):
 
                     col.calc(client_id)
 
+
+    def calc_minimum_bounds(self):
+        """
+        Find the bounds of the largest child row and use the child's bounds as the minimum.
+        """
+        width = 0
+        height = 0
+        for row in self.rows:
+            mb = row.calc_minimum_bounds()
+            if mb.height > height:
+                height = mb.height
+            if mb.width > width:
+                width = mb.width
+        return Bounds(0,0,width,height)
+
     @property
     def click_tag(self):
         if self._click_tag is not None:
@@ -651,6 +666,10 @@ class Layout(Clickable):
                 if row._is_shown:
                     # Clamp the child's bounds to be within its parents' bounds if they overlap.
                     if row.bounds.is_on_boundary(self.bounds):
+                        min_bounds = row.calc_minimum_bounds()
+                        if row.bounds.width < min_bounds.width or row.bounds.height < min_bounds.height:
+                            row._is_shown = False
+                        # else:
                         row.bounds.clamp(self.bounds)
 
             # We still want to present all children, because if we don't, then we get ghost gui elements

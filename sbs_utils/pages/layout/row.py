@@ -229,6 +229,10 @@ class Row:
                 if col._is_shown:
                     # Clamp the child's bounds to be within its parents' bounds if they overlap.
                     if col.bounds.is_on_boundary(self.bounds):
+                        min_bounds = col.calc_minimum_bounds()
+                        if col.bounds.width < min_bounds.width or col.bounds.height < min_bounds.height:
+                            col._is_shown = False
+                        # else:
                         col.bounds.clamp(self.bounds)
 
             col.present(event)
@@ -259,6 +263,20 @@ class Row:
                 self.click_tag, click_props,
                 bounds.left, bounds.top, bounds.right, bounds.bottom)
             
+    def calc_minimum_bounds(self):
+        """
+        Find the bounds of the largest child column and use the child's bounds as the minimum.
+        """
+        width = 0
+        height = 0
+        for col in self.columns:
+            mb = col.calc_minimum_bounds()
+            if mb.height > height:
+                height = mb.height
+            if mb.width > width:
+                width = mb.width
+        return Bounds(0,0,width,height)
+
     def is_message_for(self, event):
         """Used by MessageTrigger i.e. gui_message to know if message is for this object
 

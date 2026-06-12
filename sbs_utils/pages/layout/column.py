@@ -181,6 +181,26 @@ class Column:
             return self.default_font
         return self.font
     
+    def calc_minimum_bounds(self):
+        """
+        Get the minimum bounds for use by the parent row.
+        If the parent's bounds are smaller than the column's bounds, in either the horizontal or vertical direction, the column will be hidden to prevent overlapping gui elements.
+        If the row/column width are not specified, will return a bounds with height and/or width of 0.
+        
+        NOTE: For some subclasses, this function should probably be overriden.
+
+        Returns:
+            Bounds: The bounds object representing the minimum bounds of this column.
+        """
+        width = self.default_width
+        height = self.default_height
+        if width is None:
+            width = 0
+        if height is None:
+            height = 0
+        return Bounds(0,0,width,height)
+        
+    
     def get_cascade_props(self,font = False, color = False, justify = False):
         props = ""
         if font:
