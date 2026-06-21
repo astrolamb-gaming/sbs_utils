@@ -1,13 +1,8 @@
-import os 
-s = os.environ['PYTHONPATH']
-print(s)
-c = os.getcwd()
-print(c)
-
-
 from sbs_utils.mast.mast import Mast, Scope, find_exp_end
 from sbs_utils.mast.mastscheduler import MastScheduler, PollResults
 from sbs_utils.agent import clear_shared
+from sbs_utils.fs import test_set_exe_dir
+test_set_exe_dir()  # fix exe_dir and script_dir for any run mode
 from sbs_utils.mast.label import label
 import unittest
 from sbs_utils.mast_sbs import story_nodes
@@ -24,7 +19,7 @@ MastGlobals.import_python_module('sbs_utils.procedural.timers')
 MastGlobals.import_python_module('sbs_utils.procedural.gui')
 MastGlobals.import_python_module('sbs_utils.procedural.signal')
 
-from sbs_utils.mock import sbs as sbs
+from cosmos_dev.mock import sbs as sbs
 from sbs_utils.helpers import FrameContext, Context, FakeEvent
 
 def mast_assert(cond):

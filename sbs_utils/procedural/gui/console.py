@@ -1,3 +1,4 @@
+from ..inventory import get_inventory_value
 from ...helpers import FrameContext
 from ..roles import role, all_roles
 from ..query import to_set
@@ -5,11 +6,21 @@ from ..links import linked_to
 
 
 def gui_console_clients(path, for_ships=None):
-    """ gets a set of IDs for matching consoles
+    """Return the set of client IDs that have a specific console type.
+
+    Searches all player ships (or the given ship set) for linked console
+    clients whose role matches ``console,{path}``.
 
     Args:
-        console (str): The console name
+        path (str): Console path to match, e.g. ``"helm"`` or ``"science"``.
+        for_ships (object | None, optional): Agent ID, object, or set of ships
+            to search. Defaults to all ``__player__`` ships.
 
+    Returns:
+        set: Client IDs that have a console matching ``path``.
+
+    Example:
+        helm_clients = gui_console_clients("helm")
     """
     if for_ships is None:
         for_ships = role("__player__")
@@ -23,11 +34,17 @@ def gui_console_clients(path, for_ships=None):
 
 
 def gui_activate_console(console):
-    """set the console name for the client
+    """Set the current page's active console name.
+
+    Marks the page as running a specific console type, which affects which
+    console-specific routes and widgets respond to this client.
 
     Args:
-        console (str): The console name
+        console (str): Console name, e.g. ``"helm"``, ``"weapons"``,
+            ``"science"``.
 
+    Example:
+        gui_activate_console("helm")
     """    
     page = FrameContext.page
     if page is None:
@@ -36,11 +53,21 @@ def gui_activate_console(console):
 
 
 def gui_console(console, is_jump=False):
-    """Activates a console using the default set of widgets
+    """Activate a standard console with its default engine widget layout.
+
+    Sets the engine widget list for the named console using the built-in
+    configuration. Supported values: ``"helm"``, ``"weapons"``,
+    ``"science"``, ``"engineering"``, ``"comms"``, ``"cinematic"``,
+    ``"mainscreen"``, ``"cockpit"``.
 
     Args:
-        console (str): The console name
+        console (str): Console name (case-insensitive).
+        is_jump (bool, optional): For ``"helm"`` only — include jump-drive
+            controls in the widget list. Defaults to ``False``.
 
+    Example:
+        gui_console("helm")
+        gui_console("helm", is_jump=True)
     """    
     page = FrameContext.page
     if page is None:
@@ -71,7 +98,9 @@ def gui_console(console, is_jump=False):
             widgets = "3dview"
         case "mainscreen":
             console =  "normal_main"
-            view = page.gui_task.get_variable("MAIN_SCREEN_VIEW", "3d_view")
+            # view = page.gui_task.get_variable("MAIN_SCREEN_VIEW", "3d_view")
+            ship_id = FrameContext.context.sbs.get_ship_of_client(FrameContext.client_id)
+            view = get_inventory_value(ship_id, "MAIN_SCREEN_VIEW", "3d_view")
             if view == "lrs":
                 #console =  "normal_main_lrs"
                 widgets = "2dview^ship_data^text_waterfall"
