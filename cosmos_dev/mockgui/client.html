@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>SBS Remote GUI</title>
 <style>
+  @font-face { font-family:'GoldmanSansCd_Rg'; src:url('/fonts/GoldmanSansCd_Rg.ttf') format('truetype'); }
+  @font-face { font-family:'Goldman-Bold';     src:url('/fonts/Goldman-Bold.ttf')     format('truetype'); }
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
     --bg:      #0d0f14; --surface: #161923; --border: #2a2f3d;
@@ -23,18 +25,14 @@
   #status-text  { font-size:11px; color:var(--text-dim); }
   #cid-badge    { margin-left:auto; font-size:11px; color:var(--text-dim); }
   #msg-counter  { font-size:11px; color:var(--accent); }
-  #send-as-wrap { font-size:11px; color:var(--text-dim); }
-  #send-as-val  { width:3em; background:var(--surface); color:var(--text); border:1px solid var(--border);
-                  border-radius:3px; font-family:var(--font-ui); font-size:11px;
-                  padding:1px 4px; text-align:center; }
 
   #gui-root { flex:1; position:relative; overflow:hidden; }
   .gui-buffer { position:absolute; inset:0; }
-  .gui-buffer.back  { opacity:0; pointer-events:none; }
-  .gui-buffer.front { opacity:1; pointer-events:all; }
+  .gui-buffer.back  { display:none; }
+  .gui-buffer.front { display:block; }
 
   .widget { position:absolute; display:flex; align-items:center; justify-content:center;
-            font-family:var(--font-ui); font-size:12px; overflow:hidden; }
+            font-family:var(--font-ui); font-size:12px; overflow:hidden; pointer-events:auto; }
 
   .w-button { background:var(--accent); color:#fff; border:none; border-radius:var(--radius);
               cursor:pointer; font-family:var(--font-ui); font-size:12px; font-weight:600;
@@ -47,7 +45,9 @@
 
   .w-clickregion { cursor:pointer; background:transparent; border:1px dashed var(--border);
                    border-radius:var(--radius); transition:background 0.15s; }
-  .w-clickregion:hover { background:rgba(79,142,247,0.06); }
+  .w-clickregion:hover { background:var(--cr-hover-bg, rgba(79,142,247,0.06)); }
+  .cr-hover-text { opacity:0; transition:opacity 0.15s; pointer-events:none; }
+  .w-clickregion:hover .cr-hover-text { opacity:1; }
 
   .w-colorbutton { border-radius:var(--radius); cursor:pointer; border:2px solid var(--border); transition:border-color 0.15s; }
   .w-colorbutton:hover { border-color:var(--accent); }
@@ -59,34 +59,50 @@
     border:1px solid var(--border); border-radius:var(--radius); padding:0 8px;
     font-family:var(--font-ui); font-size:12px; cursor:pointer; appearance:none; }
 
-  .w-face       { background:var(--surface); border:1px solid var(--border); border-radius:50%; font-size:28px; }
-  .w-icon       { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); font-size:20px; }
-  .w-iconbutton { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
-                  cursor:pointer; font-size:18px; transition:background 0.15s; }
-  .w-iconbutton:hover { background:var(--border); }
-  .w-iconcheckbox { cursor:pointer; font-size:18px; border:2px solid var(--border);
+  .w-face       { overflow:hidden; }
+  .w-face canvas { display:block; width:100%; height:100%; }
+  .w-icon       { background:transparent; overflow:hidden; }
+  .w-iconbutton { background:transparent; overflow:hidden; cursor:pointer;
+                  border-radius:var(--radius); transition:filter 0.15s; }
+  .w-iconbutton:hover { filter:brightness(1.3); }
+  .w-iconcheckbox { overflow:hidden; cursor:pointer; border:2px solid transparent;
                     border-radius:var(--radius); transition:border-color 0.15s,background 0.15s; }
   .w-iconcheckbox.checked { border-color:var(--accent); background:rgba(79,142,247,0.12); }
 
-  .w-image { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
-  .w-image img { width:100%; height:100%; object-fit:contain; }
+  .w-image { overflow:hidden; pointer-events:none; }
+  .w-image canvas { display:block; width:100%; height:100%; }
 
-  .w-rawiconbutton { background:transparent; border:none; cursor:pointer; font-size:18px; transition:transform 0.15s; }
-  .w-rawiconbutton:hover { transform:scale(1.1); }
+  .w-rawiconbutton { background:transparent; overflow:hidden; cursor:pointer;
+                     border-radius:var(--radius); transition:filter 0.15s; }
+  .w-rawiconbutton:hover { filter:brightness(1.3); }
 
-  .w-slider { padding:0 8px; display:flex; align-items:center; gap:4px; }
-  .w-slider input[type=range] { flex:1; accent-color:var(--accent); cursor:pointer; }
-  .w-slider .slider-num { font-size:11px; min-width:2.5em; text-align:right; color:var(--text-dim); flex-shrink:0; }
+  .w-slider { padding:0; display:flex; align-items:stretch; }
+  .w-slider:not(.vertical) { flex-direction:row; gap:6px; padding:0 4px; }
+  .w-slider.vertical { flex-direction:column; }
+  .slider-track { position:relative; flex:1; background:rgba(255,255,255,0.1); border-radius:3px; cursor:pointer; min-width:0; min-height:0; transition:background 0.1s; }
+  .slider-track:hover { background:rgba(255,255,255,0.16); }
+  .slider-thumb { position:absolute; background:var(--accent,#4f8ef7); border-radius:3px; cursor:grab; transition:background 0.1s; }
+  .slider-thumb:hover { background:#6fa8ff; }
+  .slider-thumb:active { cursor:grabbing; background:#90bfff; }
+  .w-slider:not(.vertical) .slider-thumb { top:2px; bottom:2px; width:14px; transform:translateX(-50%); }
+  .w-slider.vertical .slider-thumb { left:2px; right:2px; height:14px; transform:translateY(-50%); }
+  .slider-num { font-size:11px; min-width:2.5em; text-align:right; color:var(--text-dim); flex-shrink:0; white-space:nowrap; align-self:center; }
 
-  .w-sub_region { background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:var(--radius); }
+  .region-container { position:absolute; overflow:hidden; pointer-events:none; }
+  .region-buffer    { position:absolute; inset:0; pointer-events:none; }
+  .region-buffer.front { display:block; }
+  .region-buffer.back  { display:none; }
 
   .w-text { background:transparent; padding:4px 6px; justify-content:flex-start;
-            align-items:flex-start; white-space:pre-wrap; word-break:break-word; line-height:1.5; }
+            align-items:flex-start; white-space:pre-wrap; word-break:break-word; line-height:1.5;
+            pointer-events:none; }
 
   .w-typein input { width:100%; height:100%; background:var(--surface); color:var(--text);
     border:1px solid var(--border); border-radius:var(--radius); padding:0 8px;
     font-family:var(--font-ui); font-size:12px; outline:none; transition:border-color 0.15s; }
   .w-typein input:focus { border-color:var(--accent); }
+
+  .w-3dship { overflow:hidden; background:#000; }
 
   .log-btn  { font-size:11px; padding:2px 8px; background:var(--surface); color:var(--text-dim);
               border:1px solid var(--border); border-radius:3px; cursor:pointer;
@@ -103,6 +119,21 @@
   .log-line.ev  { color:#86efac; }
   .log-line.cmd { color:#93c5fd; }
   .log-line.dbg { color:#fcd34d; }
+
+  /* font-measure modal */
+  #measure-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85);
+                   z-index:9999; align-items:center; justify-content:center; }
+  #measure-modal.visible { display:flex; }
+  #measure-box { background:var(--surface); border:1px solid var(--border); border-radius:8px;
+                 padding:16px; width:min(820px,92vw); max-height:82vh;
+                 display:flex; flex-direction:column; gap:10px; }
+  #measure-box h2 { font-size:13px; color:var(--accent); margin:0; }
+  #measure-output { background:var(--bg); padding:10px; border-radius:4px; flex:1;
+                    overflow:auto; font-size:11px; white-space:pre; font-family:var(--font-ui); }
+  .m-btns { display:flex; gap:8px; }
+  .m-btns button { font-size:11px; padding:3px 10px; background:var(--surface);
+                   color:var(--text-dim); border:1px solid var(--border); border-radius:4px; cursor:pointer; }
+  .m-btns button:hover { color:var(--text); }
 </style>
 </head>
 <body>
@@ -112,10 +143,10 @@
   <div id="status-dot"></div>
   <span id="status-text">disconnected</span>
   <span id="msg-counter">msgs: <span id="msg-count">0</span></span>
-  <span id="cid-badge">client #<span id="cid-val">—</span></span>
-  <span id="send-as-wrap" title="Events sent with this client ID — set to 0 to act as server">send as: <input id="send-as-val" type="number" min="0" value="0"></span>
+  <span id="cid-badge"><span id="mode-label">—</span> #<span id="cid-val">—</span></span>
   <button id="script-log-btn" class="log-btn" title="Toggle MAST/sbs_utils stdout+stderr">LOG</button>
   <button id="dbg-log-btn"    class="log-btn" title="Toggle browser WS/widget debug">DBG</button>
+  <button id="measure-btn"    class="log-btn" title="Measure browser font metrics for mock calibration">Measure</button>
 </div>
 
 <div id="gui-root">
@@ -126,21 +157,473 @@
 <div id="script-log-panel" class="log-panel"></div>
 <div id="dbg-log-panel"    class="log-panel"></div>
 
+<div id="measure-modal">
+  <div id="measure-box">
+    <h2>Font Measurement — copy into cosmos_dev/mock/sbs.py</h2>
+    <pre id="measure-output">Waiting for fonts…</pre>
+    <div class="m-btns">
+      <button id="measure-copy">Copy</button>
+      <button id="measure-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="/three.min.js"></script>
 <script>
 // ── Config ───────────────────────────────────────────────────────────────────
-const WS_URL = `ws://${location.host}/ws`;
+// /server → connects as the server console (clientID=0, no client_connect fired)
+// /client or anything else → connects as a new client (unique clientID)
+const _mode  = location.pathname === '/server' ? 'server' : 'client';
+const WS_URL = `ws://${location.host}/ws/${_mode}`;
 let CLIENT_ID = null;   // assigned by server on connect via "init" message
 
-// ?id=0 in URL pre-sets the "send as" input so events fire as client 0 (server)
-const _urlId = new URLSearchParams(location.search).get('id');
-if (_urlId !== null) document.getElementById('send-as-val').value = parseInt(_urlId, 10);
+let msgCount = 0;
 
-function getEffectiveId() {
-  const v = parseInt(document.getElementById('send-as-val').value, 10);
-  return isNaN(v) ? (CLIENT_ID ?? 0) : v;
+// ── Three.js shared infrastructure ───────────────────────────────────────────
+// One WebGL context for all image widgets — browsers cap contexts at ~16 per page.
+// The shared renderer renders each widget's scene to an offscreen canvas, then
+// the result is blitted into the widget's visible 2D canvas.
+const _threeRenderer = (() => {
+  if (typeof THREE === 'undefined') return null;
+  try {
+    const offscreen = document.createElement('canvas');
+    const r = new THREE.WebGLRenderer({ canvas: offscreen, alpha: true });
+    return r;
+  } catch(e) {
+    console.error('[three.js] WebGLRenderer init failed:', e);
+    return null;
+  }
+})();
+const _tl       = _threeRenderer ? new THREE.TextureLoader() : null;
+const _texCache = new Map();   // src → { tex, cbs[] }
+const _colorCtx = (() => { const c = document.createElement('canvas'); c.width = c.height = 1; return c.getContext('2d'); })();
+
+// ── Icon sheet infrastructure ─────────────────────────────────────────────
+// grid-icon-sheet.png: 2560×2560, 20 columns, 128×128 per icon (RGBA, white-on-transparent).
+// multiply-blend tinting works perfectly on white-on-transparent sprites.
+const ICON_COLS     = 20;
+const ICON_SRC_SIZE = 128;
+const _iconSheet    = { img: null, cbs: null };  // cbs=null: not yet started
+
+function _getIconSheet(cb) {
+  if (_iconSheet.img)          { cb(_iconSheet.img); return; }
+  if (_iconSheet.cbs !== null) { _iconSheet.cbs.push(cb); return; }
+  _iconSheet.cbs = [cb];
+  const img = new Image();
+  img.onload  = () => { _iconSheet.img = img; const cbs = _iconSheet.cbs; _iconSheet.cbs = null; cbs.forEach(f => f(img)); };
+  img.onerror = () => { console.error('[icon] failed to load grid-icon-sheet.png'); const cbs = _iconSheet.cbs; _iconSheet.cbs = null; cbs.forEach(f => f(null)); };
+  img.src = 'grid-icon-sheet.png';
 }
 
-let msgCount = 0;
+function _drawIcon(canvas, ctx2d, sheet, iconIndex, colorStr) {
+  const w = canvas.width, h = canvas.height;
+  if (!sheet || w <= 0 || h <= 0) return;
+  const col = iconIndex % ICON_COLS,    row = Math.floor(iconIndex / ICON_COLS);
+  const sx  = col * ICON_SRC_SIZE,      sy  = row * ICON_SRC_SIZE;
+  const {r, g, b, a} = _parseColor(colorStr || 'white');
+  const isWhite = r >= 0.99 && g >= 0.99 && b >= 0.99;
+  ctx2d.clearRect(0, 0, w, h);
+  if (isWhite) {
+    ctx2d.save(); ctx2d.globalAlpha = a;
+    ctx2d.drawImage(sheet, sx, sy, ICON_SRC_SIZE, ICON_SRC_SIZE, 0, 0, w, h);
+    ctx2d.restore();
+  } else {
+    // Tint on an OffscreenCanvas (multiply preserves colour, destination-in preserves alpha),
+    // then blit to visible canvas with the requested opacity.
+    const tmp  = new OffscreenCanvas(w, h);
+    const tctx = tmp.getContext('2d');
+    tctx.drawImage(sheet, sx, sy, ICON_SRC_SIZE, ICON_SRC_SIZE, 0, 0, w, h);
+    tctx.globalCompositeOperation = 'multiply';
+    tctx.fillStyle = `rgb(${Math.round(r*255)},${Math.round(g*255)},${Math.round(b*255)})`;
+    tctx.fillRect(0, 0, w, h);
+    tctx.globalCompositeOperation = 'destination-in';
+    tctx.drawImage(sheet, sx, sy, ICON_SRC_SIZE, ICON_SRC_SIZE, 0, 0, w, h);
+    ctx2d.save(); ctx2d.globalAlpha = a;
+    ctx2d.drawImage(tmp, 0, 0);
+    ctx2d.restore();
+  }
+}
+
+function _buildIconWidget(s, tag, ownerId, cssClass, isClickable, isToggle) {
+  const wrapper = document.createElement('div');
+  wrapper.className = cssClass;
+
+  const canvas = document.createElement('canvas');
+  canvas.style.cssText = 'display:block;width:100%;height:100%;';
+  wrapper.appendChild(canvas);
+  const ctx2d = canvas.getContext('2d');
+
+  const iconIndex = s.icon_index !== undefined ? +s.icon_index : 0;
+  const colorStr  = (s.color || 'white').trim();
+
+  function render(w, h) {
+    if (w <= 0 || h <= 0) return;
+    canvas.width = w; canvas.height = h;
+    _getIconSheet(sheet => { if (sheet) _drawIcon(canvas, ctx2d, sheet, iconIndex, colorStr); });
+  }
+  new ResizeObserver(entries => {
+    const r = entries[0].contentRect;
+    render(Math.round(r.width), Math.round(r.height));
+  }).observe(wrapper);
+  _getIconSheet(() => {});   // preload sheet early
+
+  if (isToggle) {
+    let checked = false;
+    wrapper.style.cursor = 'pointer';
+    wrapper.addEventListener('click', () => {
+      checked = !checked;
+      wrapper.classList.toggle('checked', checked);
+      sendEvent('change', tag, ownerId, { checked });
+    });
+  } else {
+    const clickTag = s.click_tag ? s.click_tag.trim() : tag;
+    if (isClickable || s.click_tag) {
+      wrapper.style.cursor = 'pointer';
+      wrapper.addEventListener('click', () => sendEvent('gui_message', clickTag, ownerId));
+    }
+  }
+
+  return wrapper;
+}
+
+// ── Face sheet infrastructure ─────────────────────────────────────────────
+// Face sprite sheets live in data/graphics/ (served at root URL by server.py).
+// In the face string, 'row' = X-axis (column index in sheet), 'col' = Y-axis (row index).
+// Terran sheet: 15 cols × 8 rows (~515×514 px per cell). All others: 8×8 (512×512 px).
+const _FACE_ALIAS = {
+  ter: 'Terran_Big-revised', tor: 'Torgoth_Set', ska: 'Skaraan_Set',
+  kra: 'Krailen_Set',        zim: 'Zimni_Set',   arv: 'Arvonian',
+};
+function _faceGridCols(alias) { return alias === 'ter' ? 15 : 8; }
+const _faceCache = {};  // alias → { img: null|Image, cbs: null|[] }
+
+function _getFaceSheet(alias, cb) {
+  const filename = _FACE_ALIAS[alias];
+  if (!filename) { cb(null); return; }
+  if (!_faceCache[alias]) _faceCache[alias] = { img: null, cbs: null };
+  const entry = _faceCache[alias];
+  if (entry.img)          { cb(entry.img); return; }
+  if (entry.cbs !== null) { entry.cbs.push(cb); return; }
+  entry.cbs = [cb];
+  const img = new Image();
+  img.onload  = () => { entry.img = img; const q = entry.cbs; entry.cbs = null; q.forEach(f => f(img)); };
+  img.onerror = () => { console.error(`[face] failed to load ${filename}.png`); const q = entry.cbs; entry.cbs = null; q.forEach(f => f(null)); };
+  img.src = `${filename}.png`;
+}
+
+function _parseFaceString(str) {
+  return (str || '').split(';').map(layer => {
+    const p = layer.trim().split(/\s+/);
+    if (p.length < 4) return null;
+    return { alias: p[0], color: p[1], row: +p[2], col: +p[3], ox: p.length > 4 ? +p[4] : 0, oy: p.length > 5 ? +p[5] : 0 };
+  }).filter(Boolean);
+}
+
+function _drawFaceLayer(canvas, ctx2d, img, cols, row, col, ox, oy, colorStr) {
+  const w = canvas.width, h = canvas.height;
+  if (!img || w <= 0 || h <= 0) return;
+  const cellW = img.width / cols, cellH = img.height / 8;
+  const { r, g, b, a } = _parseColor(colorStr || 'white');
+  const isWhite = r >= 0.99 && g >= 0.99 && b >= 0.99;
+  const sx = row * cellW + ox, sy = col * cellH + oy;
+  if (isWhite) {
+    ctx2d.save(); ctx2d.globalAlpha = a;
+    ctx2d.drawImage(img, sx, sy, cellW, cellH, 0, 0, w, h);
+    ctx2d.restore();
+  } else {
+    const tmp = new OffscreenCanvas(w, h), tctx = tmp.getContext('2d');
+    tctx.drawImage(img, sx, sy, cellW, cellH, 0, 0, w, h);
+    tctx.globalCompositeOperation = 'multiply';
+    tctx.fillStyle = `rgb(${Math.round(r*255)},${Math.round(g*255)},${Math.round(b*255)})`;
+    tctx.fillRect(0, 0, w, h);
+    tctx.globalCompositeOperation = 'destination-in';
+    tctx.drawImage(img, sx, sy, cellW, cellH, 0, 0, w, h);
+    ctx2d.save(); ctx2d.globalAlpha = a; ctx2d.drawImage(tmp, 0, 0); ctx2d.restore();
+  }
+}
+
+function _drawFace(canvas, ctx2d, layers) {
+  const w = canvas.width, h = canvas.height;
+  if (w <= 0 || h <= 0) return;
+  const aliases = [...new Set(layers.map(l => l.alias).filter(a => _FACE_ALIAS[a]))];
+  if (!aliases.length) return;
+  let pending = aliases.length;
+  aliases.forEach(alias => _getFaceSheet(alias, () => {
+    if (--pending > 0) return;
+    ctx2d.clearRect(0, 0, w, h);
+    layers.forEach(({ alias, color, row, col, ox, oy }) => {
+      const img = _faceCache[alias]?.img;
+      if (img) _drawFaceLayer(canvas, ctx2d, img, _faceGridCols(alias), row, col, ox, oy, color);
+    });
+  }));
+}
+
+// Parse any CSS color string (named, hex, rgb, rgba, with leading whitespace)
+// using the browser's own color parser. Returns { r, g, b, a } in [0,1].
+function _parseColor(cssColor) {
+  _colorCtx.clearRect(0, 0, 1, 1);
+  _colorCtx.fillStyle = '#ffffff';  // reset to known value
+  _colorCtx.fillStyle = cssColor;
+  const normalized = _colorCtx.fillStyle;  // browser normalises to #rrggbb or rgba(...)
+  const hex  = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(normalized);
+  const rgba = /rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)/.exec(normalized);
+  if (hex)  return { r: parseInt(hex[1],16)/255,  g: parseInt(hex[2],16)/255,  b: parseInt(hex[3],16)/255,  a: 1 };
+  if (rgba) return { r: parseInt(rgba[1])/255,     g: parseInt(rgba[2])/255,    b: parseInt(rgba[3])/255,    a: parseFloat(rgba[4]) };
+  return { r: 1, g: 1, b: 1, a: 1 };  // unrecognised → white (no tint)
+}
+
+function _loadTex(src, onLoad) {
+  if (!_tl || !_threeRenderer) { onLoad(null); return; }
+  if (_texCache.has(src)) {
+    const e = _texCache.get(src);
+    if (e.tex) onLoad(e.tex);
+    else       e.cbs.push(onLoad);
+    return;
+  }
+  const e = { tex: null, cbs: [onLoad] };
+  _texCache.set(src, e);
+  _tl.load(src,
+    tex  => { e.tex = tex; e.cbs.forEach(cb => cb(tex)); e.cbs = []; },
+    undefined,
+    ()   => {
+      console.error('[image] failed to load:', src);
+      _texCache.delete(src);   // allow retry on next request
+      e.cbs.forEach(cb => cb(null)); e.cbs = [];
+    }
+  );
+}
+
+function _buildImageWidget(s) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'w-image';
+  if (!s.image || !_threeRenderer) return wrapper;
+
+  // Visible 2D canvas — the shared WebGL renderer blits into it each render.
+  const displayCanvas = document.createElement('canvas');
+  const ctx2d = displayCanvas.getContext('2d');
+  wrapper.appendChild(displayCanvas);
+
+  const scene  = new THREE.Scene();
+  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  const mat    = new THREE.MeshBasicMaterial({ transparent: true, color: 0xffffff });
+  scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat));
+
+  let lastW = 0, lastH = 0;
+
+  function doRender(w, h) {
+    if (w <= 0 || h <= 0) return;
+    lastW = w; lastH = h;
+    if (!mat.map) return;
+    displayCanvas.width  = w;
+    displayCanvas.height = h;
+    _threeRenderer.setSize(w, h, false);   // false = don't touch CSS size
+    _threeRenderer.render(scene, camera);
+    ctx2d.clearRect(0, 0, w, h);
+    ctx2d.drawImage(_threeRenderer.domElement, 0, 0);
+  }
+
+  _loadTex(s.image + '.png', tex => {
+    if (!tex) return;
+    const hasSub = s.sub_rect || s.sub_left !== undefined;
+    if (hasSub) {
+      const parts = s.sub_rect ? s.sub_rect.split(',').map(Number) : [0, 0, 1, 1];
+      const sl = s.sub_left   !== undefined ? +s.sub_left   : parts[0];
+      const st = s.sub_top    !== undefined ? +s.sub_top    : parts[1];
+      const sr = s.sub_right  !== undefined ? +s.sub_right  : parts[2];
+      const sb = s.sub_bottom !== undefined ? +s.sub_bottom : parts[3];
+      tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+      tex.repeat.set(sr - sl || 1, sb - st || 1);
+      tex.offset.set(sl, 1 - sb);   // three.js v is bottom-up; sub_rect is top-down
+      tex.needsUpdate = true;
+    }
+    mat.map = tex;
+    if (s.color) {
+      const { r, g, b, a } = _parseColor(s.color);
+      mat.color.setRGB(r, g, b);
+      mat.opacity = a;
+    }
+    mat.needsUpdate = true;
+    doRender(lastW || wrapper.clientWidth, lastH || wrapper.clientHeight);
+  });
+
+  new ResizeObserver(entries => {
+    const { width, height } = entries[0].contentRect;
+    doRender(width, height);
+  }).observe(wrapper);
+
+  return wrapper;
+}
+
+// ── 3D ship rendering ────────────────────────────────────────────────────────
+// Minimal OBJ parser — handles v/vt/vn/f, triangulates polygons, flips UV.V.
+function _parseOBJ(text) {
+  const pos = [], tc = [], nrm = [];
+  const posOut = [], uvOut = [], nrmOut = [];
+  const idxOut = [];
+  const vmap = new Map();
+  let vi = 0;
+  let hasNormals = false;
+
+  const addVert = key => {
+    if (vmap.has(key)) return vmap.get(key);
+    const parts = key.split('/');
+    const pi = +parts[0] - 1;
+    const ti = parts.length > 1 && parts[1] ? +parts[1] - 1 : -1;
+    const ni = parts.length > 2 && parts[2] ? +parts[2] - 1 : -1;
+    const p = pos[pi] || [0, 0, 0];
+    posOut.push(p[0], p[1], p[2]);
+    const t = ti >= 0 && tc[ti] ? tc[ti] : [0, 0];
+    uvOut.push(t[0], t[1]);
+    if (ni >= 0 && nrm[ni]) {
+      nrmOut.push(nrm[ni][0], nrm[ni][1], nrm[ni][2]);
+      hasNormals = true;
+    } else {
+      nrmOut.push(0, 1, 0);
+    }
+    vmap.set(key, vi);
+    return vi++;
+  };
+
+  for (const rawLine of text.split('\n')) {
+    const p = rawLine.trim().split(/\s+/);
+    switch (p[0]) {
+      case 'v':  pos.push([+p[1], +p[2], +p[3]]); break;
+      case 'vt': tc.push([+p[1], 1 - +p[2]]); break;  // flip V for Three.js
+      case 'vn': nrm.push([+p[1], +p[2], +p[3]]); break;
+      case 'f': {
+        const verts = p.slice(1).map(addVert);
+        for (let i = 1; i < verts.length - 1; i++)
+          idxOut.push(verts[0], verts[i], verts[i + 1]);
+        break;
+      }
+    }
+  }
+  return { posOut, uvOut, nrmOut, idxOut, hasNormals };
+}
+
+// One entry per live 3dship widget; the global RAF loop drains this list.
+const _3dshipScenes = [];
+
+function _build3dship(msg) {
+  const el = document.createElement('div');
+  el.className = 'w-3dship';
+
+  if (!_threeRenderer) {
+    el.textContent = '[3dship: no WebGL]';
+    return el;
+  }
+
+  const displayCanvas = document.createElement('canvas');
+  displayCanvas.style.cssText = 'display:block;width:100%;height:100%;';
+  el.appendChild(displayCanvas);
+  const ctx2d = displayCanvas.getContext('2d');
+
+  const scene  = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1e8);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.9);
+  sun.position.set(2, 3, 2);
+  scene.add(sun);
+
+  // Ship meshes and textures live under data/graphics/ships/ on the server.
+  const artfileroot = msg.artfileroot ? 'ships/' + msg.artfileroot : '';
+
+  const entry = { scene, camera, mesh: null, canvas: displayCanvas, ctx: ctx2d,
+                  width: 0, height: 0, rotY: 0 };
+  _3dshipScenes.push(entry);
+
+  if (artfileroot) {
+    log(`[3dship] loading /${artfileroot}.obj`, 'dbg');
+    fetch('/' + artfileroot + '.obj')
+      .then(r => { if (!r.ok) throw new Error(`${r.status} ${r.statusText}`); return r.text(); })
+      .then(text => {
+        log(`[3dship] parsing ${artfileroot} (${text.length} bytes)`, 'dbg');
+        const { posOut, uvOut, nrmOut, idxOut, hasNormals } = _parseOBJ(text);
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(posOut), 3));
+        geo.setAttribute('uv',       new THREE.BufferAttribute(new Float32Array(uvOut), 2));
+        geo.setAttribute('normal',   new THREE.BufferAttribute(new Float32Array(nrmOut), 3));
+        geo.setIndex(new THREE.BufferAttribute(new Uint32Array(idxOut), 1));
+        if (!hasNormals) geo.computeVertexNormals();
+
+        // Center geometry at origin
+        geo.computeBoundingBox();
+        const box = geo.boundingBox;
+        geo.translate(
+          -(box.max.x + box.min.x) / 2,
+          -(box.max.y + box.min.y) / 2,
+          -(box.max.z + box.min.z) / 2
+        );
+        geo.computeBoundingBox();
+        const size = new THREE.Vector3();
+        geo.boundingBox.getSize(size);
+        const maxDim = Math.max(size.x, size.y, size.z) || 1;
+
+        const mat = new THREE.MeshPhongMaterial({ color: 0xaaaaaa, shininess: 40,
+                                                  specular: 0x444444 });
+
+        // Load textures; each updates the material as it arrives
+        _loadTex(artfileroot + '_diffuse.png', tex => {
+          if (!tex || !mat) return;
+          mat.map = tex; mat.color.setHex(0xffffff); mat.needsUpdate = true;
+        });
+        _loadTex(artfileroot + '_specular.png', tex => {
+          if (!tex || !mat) return;
+          mat.specularMap = tex; mat.needsUpdate = true;
+        });
+        _loadTex(artfileroot + '_emissive.png', tex => {
+          if (!tex || !mat) return;
+          mat.emissiveMap = tex; mat.emissive.setHex(0xffffff); mat.needsUpdate = true;
+        });
+
+        const m = new THREE.Mesh(geo, mat);
+        scene.add(m);
+        entry.mesh = m;
+
+        // Position camera so the model fills roughly 2/3 of the viewport height
+        const fovRad = camera.fov * Math.PI / 180;
+        const dist   = (maxDim / 2) / Math.tan(fovRad / 2) * 1.6;
+        camera.position.set(0, maxDim * 0.15, dist);
+        camera.near = dist * 0.001;
+        camera.far  = dist * 100;
+        camera.lookAt(0, 0, 0);
+      })
+      .catch(e => log(`[3dship] load failed: ${artfileroot} — ${e}`, 'err'));
+  }
+
+  new ResizeObserver(entries => {
+    const rc = entries[0].contentRect;
+    entry.width  = Math.round(rc.width);
+    entry.height = Math.round(rc.height);
+  }).observe(el);
+
+  return el;
+}
+
+// Global RAF loop — renders all live 3dship scenes through the shared WebGL renderer.
+(function _start3dLoop() {
+  if (!_threeRenderer) return;
+  function loop() {
+    requestAnimationFrame(loop);
+    for (let i = _3dshipScenes.length - 1; i >= 0; i--) {
+      const e = _3dshipScenes[i];
+      // Auto-remove scenes whose canvas left the DOM (buffer swap / page rebuild)
+      if (!e.canvas.isConnected) { _3dshipScenes.splice(i, 1); continue; }
+      if (!e.mesh || e.width <= 0 || e.height <= 0) continue;
+      e.rotY += 0.005;
+      e.mesh.rotation.y = e.rotY;
+      e.canvas.width  = e.width;
+      e.canvas.height = e.height;
+      e.camera.aspect = e.width / e.height;
+      e.camera.updateProjectionMatrix();
+      _threeRenderer.setSize(e.width, e.height, false);
+      _threeRenderer.render(e.scene, e.camera);
+      e.ctx.clearRect(0, 0, e.width, e.height);
+      e.ctx.drawImage(_threeRenderer.domElement, 0, 0);
+    }
+  }
+  loop();
+})();
 
 // ── Log panels ───────────────────────────────────────────────────────────────
 const scriptLogPanel = document.getElementById('script-log-panel');
@@ -164,9 +647,19 @@ function log(msg, cls = '') {
 }
 
 // ── Buffers ───────────────────────────────────────────────────────────────────
-let frontBuf = document.getElementById('buf-front');
-let backBuf  = document.getElementById('buf-back');
-log(`init: frontBuf=#${frontBuf.id} backBuf=#${backBuf.id}`, 'dbg');
+// ── Region registry ───────────────────────────────────────────────────────────
+// Each entry: { container, front, back, inProgress, parentTag }
+// Root entry uses the two static #buf-front / #buf-back divs.
+const _regions = {
+  "": {
+    container: document.getElementById('gui-root'),
+    front:     document.getElementById('buf-front'),
+    back:      document.getElementById('buf-back'),
+    inProgress: false,
+    parentTag:  null,
+  }
+};
+log(`init: root region registered`, 'dbg');
 
 // ── WebSocket ────────────────────────────────────────────────────────────────
 let ws;
@@ -200,21 +693,29 @@ function connect() {
 connect();
 
 // ── Event → server ────────────────────────────────────────────────────────────
-function sendEvent(type, tag, detail = {}) {
-  const eid = getEffectiveId();
+// clientID is the owner of the widget that fired the event — taken from the
+// command that rendered it, so server-page widgets fire as 0 and client-page
+// widgets fire as the browser's assigned ID automatically.
+function sendEvent(type, tag, clientID, detail = {}) {
   if (ws && ws.readyState === WebSocket.OPEN)
-    ws.send(JSON.stringify({ type, tag, clientID: eid, ...detail }));
-  log(`TX ${type} tag=${tag} as=${eid}`, 'ev');
+    ws.send(JSON.stringify({ type, tag, clientID, ...detail }));
+  log(`TX ${type} tag=${tag} clientID=${clientID}`, 'ev');
 }
 
 // ── Dispatch ──────────────────────────────────────────────────────────────────
 function dispatch(msg) {
+  // In client mode, ignore GUI commands addressed to the server (clientID "0") or any
+  // other client. The server rebuilds and broadcasts its own frame every tick; without
+  // this filter those clear/complete cycles wipe the client's own frame each tick.
+  if (_mode === 'client' && CLIENT_ID !== null && msg.cmd !== 'init' && msg.cmd !== 'log') {
+    if (msg.clientID !== CLIENT_ID) return;
+  }
   switch (msg.cmd) {
-    case 'init':     cmdInit(msg);   break;
-    case 'clear':    cmdClear();     break;
-    case 'complete': cmdComplete();  break;
-    case 'log':      cmdLog(msg);    break;
-    default:         cmdWidget(msg); break;
+    case 'init':     cmdInit(msg);     break;
+    case 'clear':    cmdClear(msg);    break;
+    case 'complete': cmdComplete(msg); break;
+    case 'log':      cmdLog(msg);      break;
+    default:         cmdWidget(msg);   break;
   }
 }
 
@@ -234,51 +735,25 @@ function cmdLog(msg) {
 }
 
 // ── init ──────────────────────────────────────────────────────────────────────
+function sendScreenSize() {
+  if (ws && ws.readyState === WebSocket.OPEN && CLIENT_ID !== null)
+    ws.send(JSON.stringify({ type: 'screen_size', clientID: String(CLIENT_ID),
+                             width: window.innerWidth, height: window.innerHeight }));
+}
+
 function cmdInit(msg) {
   CLIENT_ID = msg.clientID;
+  document.getElementById('mode-label').textContent = _mode;
   document.getElementById('cid-val').textContent = CLIENT_ID;
-  // Only set send-as to assigned ID if the user hasn't set it via URL param or manually
-  if (_urlId === null) document.getElementById('send-as-val').value = CLIENT_ID;
-  log(`  assigned clientID=${CLIENT_ID}  sendAs=${getEffectiveId()}`, 'ev');
+  log(`  mode=${_mode} clientID=${CLIENT_ID}`, 'ev');
+  sendScreenSize();
 }
 
-// ── Sub-region registry (root-canvas coords, rebuilt each frame) ─────────────
-let backRegions = {};
-
-// True between a 'clear' and the next 'complete' — a full frame rebuild is in
-// progress, so widgets must go into backBuf even if they already exist in frontBuf.
-let _frameInProgress = false;
-
-// ── clear ─────────────────────────────────────────────────────────────────────
-function cmdClear() {
-  backBuf.innerHTML = '';
-  backRegions = {};
-  _frameInProgress = true;
-  log(`  clear → #${backBuf.id} wiped`, 'dbg');
-}
-
-// ── complete ──────────────────────────────────────────────────────────────────
-function cmdComplete() {
-  const prevFrontId = frontBuf.id;
-  const prevBackId  = backBuf.id;
-  const childCount  = backBuf.children.length;
-
-  // Demote current front → back
-  frontBuf.classList.replace('front', 'back');
-  frontBuf.style.opacity = '0';
-  frontBuf.style.pointerEvents = 'none';
-
-  // Promote current back → front
-  backBuf.classList.replace('back', 'front');
-  backBuf.style.opacity = '1';
-  backBuf.style.pointerEvents = 'all';
-
-  // Swap JS references
-  [frontBuf, backBuf] = [backBuf, frontBuf];
-  _frameInProgress = false;
-
-  log(`  complete: #${prevBackId}(${childCount} children) → front, #${prevFrontId} → back`, 'dbg');
-}
+let _resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(_resizeTimer);
+  _resizeTimer = setTimeout(sendScreenSize, 250);
+});
 
 // ── pct helper ────────────────────────────────────────────────────────────────
 function pct(v) { return v.toFixed(4) + '%'; }
@@ -290,16 +765,46 @@ function placeRoot(el, left, top, right, bottom) {
   el.style.height = pct(bottom - top);
 }
 
-// Convert parent-relative 0-100 coords to root-canvas 0-100 coords
-function toRoot(p, left, top, right, bottom) {
-  const pw = p.right - p.left;
-  const ph = p.bottom - p.top;
-  return {
-    left:   p.left + pw * left   / 100,
-    top:    p.top  + ph * top    / 100,
-    right:  p.left + pw * right  / 100,
-    bottom: p.top  + ph * bottom / 100,
-  };
+// ── clear ─────────────────────────────────────────────────────────────────────
+function _clearRegionChildren(parentTag) {
+  for (const k of Object.keys(_regions)) {
+    if (k !== "" && _regions[k].parentTag === parentTag) {
+      _clearRegionChildren(k);
+      delete _regions[k];
+    }
+  }
+}
+
+function cmdClear(msg) {
+  const tag = msg.tag || "";
+  if (tag === "") {
+    // Root clear: wipe the whole client tree
+    _regions[""].back.innerHTML = '';
+    _regions[""].inProgress = true;
+    for (const k of Object.keys(_regions)) { if (k !== "") delete _regions[k]; }
+    log(`  clear root → back wiped, all sub-regions discarded`, 'dbg');
+  } else {
+    const region = _regions[tag];
+    if (!region) { log(`  clear: unknown region "${tag}"`, 'err'); return; }
+    region.back.innerHTML = '';
+    region.inProgress = true;
+    _clearRegionChildren(tag);
+    log(`  clear region="${tag}" → back wiped`, 'dbg');
+  }
+}
+
+// ── complete ──────────────────────────────────────────────────────────────────
+function cmdComplete(msg) {
+  const tag = msg.tag || "";
+  const region = _regions[tag];
+  if (!region) { log(`  complete: unknown region "${tag}"`, 'err'); return; }
+
+  region.front.classList.replace('front', 'back');
+  region.back.classList.replace('back',  'front');
+  [region.front, region.back] = [region.back, region.front];
+  region.inProgress = false;
+
+  log(`  complete region="${tag || 'root'}" → swapped (${region.back.children.length} old children now in back)`, 'dbg');
 }
 
 // ── Style string parser ───────────────────────────────────────────────────────
@@ -325,7 +830,7 @@ function parseStyle(styleStr) {
     const i = p.indexOf(':');
     if (i > 0) {
       const key = p.slice(0, i).trim();
-      let val = p.slice(i + 1);
+      let val = p.slice(i + 1).trim();
       // Strip optional backtick enclosure
       if (val.startsWith('`') && val.endsWith('`') && val.length >= 2)
         val = val.slice(1, -1);
@@ -338,54 +843,104 @@ function parseStyle(styleStr) {
 // True for Artemis boolean flag values: on / yes / True / active
 function isOn(v) { return v != null && /^(on|yes|true|active)$/i.test(String(v).trim()); }
 
+// ── cmdSubRegion ──────────────────────────────────────────────────────────────
+// Creates or updates a named child region. Regions have their own front/back
+// buffer pair and can be independently rebuilt with clear(tag)/complete(tag).
+function cmdSubRegion(msg, s) {
+  const { tag, parent, left, top, right, bottom } = msg;
+  const parentRegion = _regions[parent != null ? parent : ""] || _regions[""];
+
+  let entry = _regions[tag];
+  if (!entry) {
+    const front = document.createElement('div'); front.className = 'region-buffer front';
+    const back  = document.createElement('div'); back.className  = 'region-buffer back';
+    const container = document.createElement('div'); container.className = 'region-container';
+    if (tag) container.dataset.tag = tag;
+    container.append(front, back);
+    entry = { container, front, back, inProgress: false, parentTag: parent || "" };
+    _regions[tag] = entry;
+    // Add to parent's active buffer (back if rebuilding, front otherwise)
+    const dest = parentRegion.inProgress ? parentRegion.back : parentRegion.front;
+    dest.appendChild(container);
+    log(`  +sub_region tag="${tag}" → region[${parent||'root'}] ${parentRegion.inProgress ? 'back' : 'front'}`, 'dbg');
+  } else {
+    log(`  ~sub_region tag="${tag}" (reposition)`, 'dbg');
+  }
+  placeRoot(entry.container, left, top, right, bottom);
+}
+
 // ── cmdWidget ─────────────────────────────────────────────────────────────────
 function cmdWidget(msg) {
   const { cmd, tag, parent, left, top, right, bottom } = msg;
   const s = parseStyle(msg.style);
+
+  // sub_region registers a child region; not a normal placeable widget
+  if (cmd === 'sub_region') { cmdSubRegion(msg, s); return; }
+
   const el = buildWidget(msg, s);
   if (!el) return;
 
   el.classList.add('widget');
   if (tag) el.dataset.tag = tag;
-  if (s.draw_layer) el.style.zIndex = s.draw_layer;
+  el.style.zIndex = s.draw_layer || 1001;  // engine default is 1001
 
-  // The real engine allows send_gui_* with an existing tag to update an element
-  // in-place without a full clear/complete cycle (used by gui_represent).
-  // Only do this outside a rebuild — during clear→complete the widget must go
-  // into backBuf so the buffer swap shows correct content.
-  if (tag && !_frameInProgress) {
-    const existing = frontBuf.querySelector(`[data-tag="${CSS.escape(tag)}"]`);
+  const region = _regions[parent != null ? parent : ""] || _regions[""];
+
+  // In-place update: outside a rebuild, replace the existing element in the
+  // region's live front buffer.
+  if (tag && !region.inProgress) {
+    const existing = region.front.querySelector(`[data-tag="${CSS.escape(tag)}"]`);
     if (existing) {
       el.style.left   = existing.style.left;
       el.style.top    = existing.style.top;
       el.style.width  = existing.style.width;
       el.style.height = existing.style.height;
-      if (!s.draw_layer && existing.style.zIndex)
-        el.style.zIndex = existing.style.zIndex;
       existing.parentNode.replaceChild(el, existing);
-      log(`  ~${cmd} tag=${tag} → #${frontBuf.id} (in-place update)`, 'dbg');
+      log(`  ~${cmd} tag=${tag} → region[${parent||'root'}] front (in-place)`, 'dbg');
       return;
     }
+    // No matching element in front and not inside a rebuild — stale update, discard.
+    // Appending to the back would accumulate hidden elements that surface on the next
+    // buffer swap and can intercept clicks as invisible clickregions.
+    log(`  ?${cmd} tag=${tag} → stale out-of-rebuild update, discarding`, 'dbg');
+    return;
   }
 
-  let rc;
+  // Rebuild path: append to the region's back buffer.
+  // Coordinates are always relative to the region container — no toRoot needed.
   if (isOn(s.pixel_aligned)) {
-    // Coordinates are pixel values, not percentages
     el.style.left   = left + 'px';
     el.style.top    = top + 'px';
     el.style.width  = (right - left) + 'px';
     el.style.height = (bottom - top) + 'px';
-    rc = { left, top, right, bottom };
   } else {
-    rc = (parent && backRegions[parent])
-      ? toRoot(backRegions[parent], left, top, right, bottom)
-      : { left, top, right, bottom };
-    placeRoot(el, rc.left, rc.top, rc.right, rc.bottom);
+    placeRoot(el, left, top, right, bottom);
   }
 
-  if (cmd === 'sub_region') backRegions[tag] = rc;
-  backBuf.appendChild(el);
-  log(`  +${cmd} tag=${tag} → #${backBuf.id}  [${pct(rc.left)},${pct(rc.top)},${pct(rc.right-rc.left)},${pct(rc.bottom-rc.top)}]`, 'dbg');
+  region.back.appendChild(el);
+  log(`  +${cmd} tag=${tag} → region[${parent||'root'}] back [${pct(left)},${pct(top)},${pct(right-left)},${pct(bottom-top)}]`, 'dbg');
+}
+
+// ── ctext ─────────────────────────────────────────────────────────────────────
+// Cosmos uses ^ as a newline separator in text strings.
+function ctext(s) { return s ? s.replace(/\^/g, '\n') : s; }
+
+// ── applyFont ─────────────────────────────────────────────────────────────────
+// Maps Cosmos font tags to the Goldman font families and sizes from preferences.json.
+const _FONT_MAP = {
+  'smallest': { family: 'GoldmanSansCd_Rg', size: 18 },
+  'gui-1':    { family: 'GoldmanSansCd_Rg', size: 22 },
+  'gui-2':    { family: 'GoldmanSansCd_Rg', size: 24 },
+  'gui-2A':   { family: 'GoldmanSansCd_Rg', size: 28 },
+  'gui-3':    { family: 'Goldman-Bold',      size: 28 },
+  'gui-4':    { family: 'Goldman-Bold',      size: 32 },
+  'gui-5':    { family: 'Goldman-Bold',      size: 36 },
+  'gui-6':    { family: 'Goldman-Bold',      size: 52 },
+};
+function applyFont(el, tag) {
+  const f = _FONT_MAP[tag];
+  if (f) { el.style.fontFamily = f.family; el.style.fontSize = f.size + 'px'; }
+  else   { el.style.fontFamily = tag; }
 }
 
 // ── buildWidget ───────────────────────────────────────────────────────────────
@@ -398,147 +953,206 @@ function buildWidget(msg, s) {
   let el;
   switch (cmd) {
     case 'button': {
+      const ownerId = msg.clientID ?? 0;
       el = document.createElement('button');
       el.className = 'w-button';
-      el.textContent = s.text || tag;
+      el.textContent = ctext(s.text) || tag;
       if (s.color) el.style.color = s.color;
-      if (s.font)  el.style.fontFamily = s.font;
-      el.addEventListener('click', () => sendEvent('gui_message', tag));
+      if (s.font)  applyFont(el, s.font);
+      el.addEventListener('click', () => sendEvent('gui_message', tag, ownerId));
       break;
     }
     case 'checkbox': {
+      const ownerId = msg.clientID ?? 0;
       el = document.createElement('label');
       el.className = 'w-checkbox';
       const cb = document.createElement('input'); cb.type = 'checkbox';
       cb.checked = isOn(s.state);
       if (s.visible !== undefined && !isOn(s.visible)) el.style.visibility = 'hidden';
       const sp = document.createElement('span');
-      sp.textContent = s.text || tag;
+      sp.textContent = ctext(s.text) || tag;
       if (s.color) sp.style.color = s.color;
-      if (s.font)  sp.style.fontFamily = s.font;
+      if (s.font)  applyFont(sp, s.font);
       el.append(cb, sp);
-      cb.addEventListener('change', () => sendEvent('gui_message', tag, { checked: cb.checked }));
+      cb.addEventListener('change', () => sendEvent('gui_message', tag, ownerId, { checked: cb.checked }));
       break;
     }
     case 'clickregion': {
+      const ownerId = msg.clientID ?? 0;
       el = document.createElement('div'); el.className = 'w-clickregion';
-      if (s.text) { el.textContent = s.text; if (s.color) el.style.color = s.color; }
-      if (s.background_color) el.style.background = s.background_color;
-      el.addEventListener('click', () => sendEvent('gui_message', tag));
+      if (s.background_color) el.style.setProperty('--cr-hover-bg', s.background_color.trim());
+      if (s.text) {
+        const span = document.createElement('span'); span.className = 'cr-hover-text';
+        span.textContent = ctext(s.text);
+        if (s.color) span.style.color = s.color;
+        if (s.font)  applyFont(span, s.font);
+        el.appendChild(span);
+      }
+      el.addEventListener('click', () => sendEvent('gui_message', tag, ownerId));
       break;
     }
     case 'colorbutton': {
+      const ownerId = msg.clientID ?? 0;
       el = document.createElement('div'); el.className = 'w-colorbutton';
-      const btnColor = s.color || '#4f8ef7';
-      el.style.background = btnColor; el.title = tag;
-      el.addEventListener('click', () => sendEvent('gui_message', tag, { color: btnColor }));
+      const btnColor = (s.color || '#4f8ef7').trim();
+      el.style.backgroundColor = btnColor; el.title = tag;
+      el.addEventListener('click', () => sendEvent('gui_message', tag, ownerId, { color: btnColor }));
       break;
     }
     case 'colorcheckbox': {
+      const ownerId = msg.clientID ?? 0;
       el = document.createElement('label'); el.className = 'w-colorcheckbox';
       const sw = document.createElement('div'); sw.className = 'swatch';
       const chkColor = s.color || '#4f8ef7';
       sw.style.background = chkColor;
       const cb2 = document.createElement('input'); cb2.type = 'checkbox'; cb2.style.display = 'none';
       el.append(sw, cb2);
-      el.addEventListener('click', () => { cb2.checked = !cb2.checked; sendEvent('change', tag, { checked: cb2.checked, color: chkColor }); });
+      el.addEventListener('click', () => { cb2.checked = !cb2.checked; sendEvent('change', tag, ownerId, { checked: cb2.checked, color: chkColor }); });
       break;
     }
     case 'dropdown': {
+      const ownerId = msg.clientID ?? 0;
       el = document.createElement('div'); el.className = 'w-dropdown';
       const sel = document.createElement('select');
       (s.list || s.text || tag).split(',').forEach(o => {
         const opt = document.createElement('option'); opt.value = opt.textContent = o.trim(); sel.appendChild(opt);
       });
       if (s.color) sel.style.color = s.color;
-      if (s.font)  sel.style.fontFamily = s.font;
+      if (s.font)  applyFont(sel, s.font);
       el.appendChild(sel);
-      sel.addEventListener('change', () => sendEvent('change', tag, { value: sel.value }));
+      sel.addEventListener('change', () => sendEvent('change', tag, ownerId, { value: sel.value }));
       break;
     }
     case 'face': {
       el = document.createElement('div'); el.className = 'w-face';
-      el.textContent = msg.face_string || '🙂'; break;
+      const fcanvas = document.createElement('canvas');
+      fcanvas.style.cssText = 'display:block;width:100%;height:100%;';
+      el.appendChild(fcanvas);
+      const fctx = fcanvas.getContext('2d');
+      const flayers = _parseFaceString(msg.face_string);
+      new ResizeObserver(entries => {
+        const rc = entries[0].contentRect;
+        const rw = Math.round(rc.width), rh = Math.round(rc.height);
+        if (rw <= 0 || rh <= 0) return;
+        fcanvas.width = rw; fcanvas.height = rh;
+        _drawFace(fcanvas, fctx, flayers);
+      }).observe(el);
+      // Preload all referenced sheets early
+      [...new Set(flayers.map(l => l.alias))].forEach(a => _getFaceSheet(a, () => {}));
+      break;
     }
     case 'icon': {
-      el = document.createElement('div'); el.className = 'w-icon';
-      el.textContent = s.text || (s.icon_index !== undefined ? `[${s.icon_index}]` : '🔷');
-      if (s.color) el.style.color = s.color;
-      if (s.font)  el.style.fontFamily = s.font;
+      const ownerId = msg.clientID ?? 0;
+      el = _buildIconWidget(s, tag, ownerId, 'w-icon', false, false);
       break;
     }
     case 'iconbutton': {
-      el = document.createElement('div'); el.className = 'w-iconbutton';
-      el.textContent = s.icon_index !== undefined ? `[${s.icon_index}]` : '🔵';
-      if (s.color) el.style.color = s.color;
-      el.addEventListener('click', () => sendEvent('gui_message', tag)); break;
+      const ownerId = msg.clientID ?? 0;
+      el = _buildIconWidget(s, tag, ownerId, 'w-iconbutton', true, false);
+      break;
     }
     case 'iconcheckbox': {
-      el = document.createElement('div'); el.className = 'w-iconcheckbox';
-      el.textContent = s.icon_index !== undefined ? `[${s.icon_index}]` : '☐';
-      if (s.color) el.style.color = s.color;
-      let chk = false;
-      el.addEventListener('click', () => { chk = !chk; el.classList.toggle('checked', chk); sendEvent('change', tag, { checked: chk }); });
+      const ownerId = msg.clientID ?? 0;
+      el = _buildIconWidget(s, tag, ownerId, 'w-iconcheckbox', false, true);
       break;
     }
     case 'image': {
-      el = document.createElement('div'); el.className = 'w-image';
-      if (s.image) {
-        const imgSrc = s.image + '.png';
-        const hasSub = s.sub_rect || s.sub_left !== undefined || s.sub_top !== undefined;
-        if (hasSub) {
-          // sub_rect values are 0–1 fractions of the source image
-          const parts = s.sub_rect ? s.sub_rect.split(',').map(Number) : [0, 0, 1, 1];
-          const sl = s.sub_left   !== undefined ? +s.sub_left   : parts[0];
-          const st = s.sub_top    !== undefined ? +s.sub_top    : parts[1];
-          const sr = s.sub_right  !== undefined ? +s.sub_right  : parts[2];
-          const sb = s.sub_bottom !== undefined ? +s.sub_bottom : parts[3];
-          const sw = sr - sl || 1, sh = sb - st || 1;
-          el.style.backgroundImage    = `url('${imgSrc}')`;
-          el.style.backgroundRepeat   = 'no-repeat';
-          el.style.backgroundSize     = `${(100 / sw).toFixed(2)}% ${(100 / sh).toFixed(2)}%`;
-          el.style.backgroundPosition = `${(-sl / sw * 100).toFixed(2)}% ${(-st / sh * 100).toFixed(2)}%`;
-        } else {
-          const img = document.createElement('img'); img.src = imgSrc; img.alt = tag;
-          el.appendChild(img);
-        }
-      }
+      el = _buildImageWidget(s);
       break;
     }
     case 'rawiconbutton': {
-      el = document.createElement('div'); el.className = 'w-rawiconbutton';
-      el.textContent = s.icon_index !== undefined ? `[${s.icon_index}]` : '▶';
-      if (s.color) el.style.color = s.color;
-      el.addEventListener('click', () => sendEvent('gui_message', tag)); break;
-    }
-    case 'slider': {
-      el = document.createElement('div'); el.className = 'w-slider';
-      const rng = document.createElement('input'); rng.type = 'range';
-      rng.min = s.low ?? 0; rng.max = s.high ?? 100; rng.value = msg.current ?? 50;
-      // show_number defaults to shown; hide only if explicitly set to a falsy flag value
-      const hideNum = s.show_number !== undefined && !isOn(s.show_number);
-      if (!hideNum) {
-        const numEl = document.createElement('span'); numEl.className = 'slider-num';
-        numEl.textContent = rng.value;
-        if (s.color) numEl.style.color = s.color;
-        rng.addEventListener('input', () => { numEl.textContent = rng.value; sendEvent('change', tag, { value: +rng.value }); });
-        el.append(rng, numEl);
-      } else {
-        rng.addEventListener('input', () => sendEvent('change', tag, { value: +rng.value }));
-        el.appendChild(rng);
-      }
+      const ownerId = msg.clientID ?? 0;
+      el = _buildIconWidget(s, tag, ownerId, 'w-rawiconbutton', true, false);
       break;
     }
-    case 'sub_region': {
-      el = document.createElement('div'); el.className = 'w-sub_region';
-      if (s.text) { el.textContent = s.text; if (s.color) el.style.color = s.color; }
+    case 'slider': {
+      const ownerId = msg.clientID ?? 0;
+      const isVertical = (msg.bottom - msg.top) > (msg.right - msg.left);
+      const low = +(s.low ?? 0), high = +(s.high ?? 100);
+      const isInt = Number.isInteger(low) && Number.isInteger(high);
+      let cur = +(msg.current ?? (low + high) / 2);
+      let lastFired = isInt ? Math.round(cur) : cur;
+
+      el = document.createElement('div'); el.className = isVertical ? 'w-slider vertical' : 'w-slider';
+
+      const track = document.createElement('div'); track.className = 'slider-track';
+      const thumb = document.createElement('div'); thumb.className = 'slider-thumb';
+      track.appendChild(thumb);
+
+      // Number label — horizontal only, respect show_number flag
+      const hideNum = isVertical || (s.show_number !== undefined && !isOn(s.show_number));
+      let numEl = null;
+      if (!hideNum) {
+        numEl = document.createElement('span'); numEl.className = 'slider-num';
+        numEl.textContent = isInt ? Math.round(cur) : cur.toFixed(1);
+        if (s.color) numEl.style.color = s.color;
+        el.append(track, numEl);
+      } else {
+        el.appendChild(track);
+      }
+
+      const updateThumb = v => {
+        let frac = Math.max(0, Math.min(1, (v - low) / (high - low || 1)));
+        if (isVertical) { frac = 1 - frac; thumb.style.top  = (frac * 100).toFixed(3) + '%'; }
+        else            {                   thumb.style.left = (frac * 100).toFixed(3) + '%'; }
+        if (numEl) numEl.textContent = isInt ? Math.round(v) : v.toFixed(1);
+      };
+      updateThumb(cur);
+
+      const fireChange = v => {
+        if (isInt) {
+          const iv = Math.round(v);
+          if (iv === lastFired) return;
+          lastFired = iv;
+          sendEvent('change', tag, ownerId, { value: iv });
+        } else {
+          sendEvent('change', tag, ownerId, { value: v });
+        }
+      };
+
+      // Click track to jump
+      track.addEventListener('click', e => {
+        if (e.target === thumb) return;
+        const rect = track.getBoundingClientRect();
+        let frac = isVertical
+          ? Math.max(0, Math.min(1, 1 - (e.clientY - rect.top)  / rect.height))
+          : Math.max(0, Math.min(1,     (e.clientX - rect.left) / rect.width));
+        cur = low + frac * (high - low);
+        updateThumb(cur);
+        fireChange(cur);
+      });
+
+      // Drag thumb — capture span at pointerdown while track is live; use document
+      // listeners so overlapping widgets can't block the drag mid-move.
+      thumb.addEventListener('pointerdown', e => {
+        const rect = track.getBoundingClientRect();
+        const span = isVertical ? rect.height : rect.width;
+        if (span <= 0) return;
+        const startPos = isVertical ? e.clientY : e.clientX;
+        const startVal = cur;
+        const dir = isVertical ? -1 : 1;
+        e.stopPropagation(); e.preventDefault();
+
+        function onMove(e) {
+          const moved = (isVertical ? e.clientY : e.clientX) - startPos;
+          cur = Math.max(low, Math.min(high, startVal + dir * moved / span * (high - low)));
+          updateThumb(cur);
+          fireChange(cur);
+        }
+        function onUp() {
+          document.removeEventListener('pointermove', onMove);
+          document.removeEventListener('pointerup', onUp);
+        }
+        document.addEventListener('pointermove', onMove);
+        document.addEventListener('pointerup', onUp);
+      });
       break;
     }
     case 'text': {
       el = document.createElement('div'); el.className = 'w-text';
-      el.textContent = s.text || tag;
+      el.textContent = ctext(s.text) || tag;
       if (s.color) el.style.color = s.color;
-      if (s.font)  el.style.fontFamily = s.font;
+      if (s.font)  applyFont(el, s.font);
       if (s.justify) {
         const jmap = { left: 'flex-start', right: 'flex-end', center: 'center' };
         const j = jmap[s.justify.toLowerCase()];
@@ -547,24 +1161,29 @@ function buildWidget(msg, s) {
       break;
     }
     case 'typein': {
+      const ownerId = msg.clientID ?? 0;
       el = document.createElement('div'); el.className = 'w-typein';
       const inp = document.createElement('input');
       inp.type = isOn(s.password) ? 'password' : 'text';
       inp.placeholder = s.desc || '';
       if (s.text)  inp.value = s.text;
       if (s.color) inp.style.color = s.color;
-      if (s.font)  inp.style.fontFamily = s.font;
+      if (s.font)  applyFont(inp, s.font);
       el.appendChild(inp);
-      inp.addEventListener('change',  () => sendEvent('change', tag, { value: inp.value }));
-      inp.addEventListener('keydown', e => { if (e.key === 'Enter') sendEvent('submit', tag, { value: inp.value }); });
+      inp.addEventListener('change',  () => sendEvent('change', tag, ownerId, { value: inp.value }));
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') sendEvent('submit', tag, ownerId, { value: inp.value }); });
       break;
     }
     case 'hotkey': {
+      const ownerId = msg.clientID ?? 0;
       document.addEventListener('keydown', e => {
         if (e.key === msg.keyType || e.code === msg.keyType)
-          sendEvent('hotkey', tag, { keyType: msg.keyType, category: msg.category });
+          sendEvent('hotkey', tag, ownerId, { keyType: msg.keyType, category: msg.category });
       });
       return null;
+    }
+    case '3dship': {
+      return _build3dship(msg);
     }
     default: {
       el = document.createElement('div'); el.className = 'w-text';
@@ -574,6 +1193,141 @@ function buildWidget(msg, s) {
   }
   return el;
 }
+
+// ── font measurement ──────────────────────────────────────────────────────────
+function _measureFonts() {
+  const FONT_DEFS = [
+    ['smallest', 'GoldmanSansCd_Rg', 18],
+    ['gui-1',    'GoldmanSansCd_Rg', 22],
+    ['gui-2',    'GoldmanSansCd_Rg', 24],
+    ['gui-3',    'Goldman-Bold',     28],
+    ['gui-4',    'Goldman-Bold',     32],
+    ['gui-5',    'Goldman-Bold',     36],
+    ['gui-6',    'Goldman-Bold',     52],
+  ];
+  const NARROW = ['iiiiiiiiii', 'llllllllll'];
+  const WIDE   = ['MMMMMMMMMM', 'WWWWWWWWWW', 'mmmmmmmmmm', 'wwwwwwwwww'];
+  const AVG    = ['xxxxxxxxxx', 'aaaaaaaaaa', 'HHHHHHHHHH', '0000000000'];
+
+  const canvas = document.createElement('canvas');
+  const ctx    = canvas.getContext('2d');
+  const res    = {};
+
+  for (const [tag, family, size] of FONT_DEFS) {
+    // DOM span: actual rendered line height (what the browser lays out)
+    const span = document.createElement('span');
+    span.style.cssText = `font-family:'${family}';font-size:${size}px;line-height:normal;`
+                       + `position:fixed;top:-9999px;left:0;white-space:nowrap;visibility:hidden;`;
+    span.textContent = 'AXgjpy|Qq';
+    document.body.appendChild(span);
+    const lh = Math.ceil(span.getBoundingClientRect().height);
+    document.body.removeChild(span);
+
+    // Canvas measureText: per-character pixel widths
+    const avgW = (tests) => {
+      ctx.font = `${size}px '${family}'`;
+      let s = 0;
+      for (const t of tests) s += ctx.measureText(t).width / t.length;
+      return +(s / tests.length).toFixed(2);
+    };
+
+    res[tag] = { css_size: size, line_height: lh,
+                 narrow: avgW(NARROW), wide: avgW(WIDE), avg: avgW(AVG) };
+  }
+  return res;
+}
+
+function _measureFormatOutput(res) {
+  const TAGS = ['smallest', 'gui-1', 'gui-2', 'gui-3', 'gui-4', 'gui-5', 'gui-6'];
+
+  const lines = [
+    '# Generated by the Measure button in the mockgui browser.',
+    '# Goldman fonts rendered in THIS browser window — values depend on browser/OS.',
+    '# Paste into cosmos_dev/mock/sbs.py',
+    '',
+    '# 1. Replace _font_size() with browser-rendered line heights:',
+    'def _font_size(fontTag: str) -> int:',
+    '    return {',
+  ];
+  for (const t of TAGS) {
+    if (res[t]) lines.push(`        "${t}": ${res[t].line_height},`);
+  }
+  lines.push(`    }.get(fontTag, ${res['gui-3']?.line_height ?? 30})\n`);
+
+  lines.push('# 2. Drop the × 1.25 multiplier — _font_size already IS the line height:');
+  lines.push('def get_text_line_height(fontTag: str, textToMeasure: str) -> int:');
+  lines.push('    return _font_size(fontTag)\n');
+
+  lines.push('# 3. Per-font char widths (narrow, wide, avg) in pixels from canvas.measureText:');
+  lines.push('_CHAR_WIDTHS = {');
+  for (const t of TAGS) {
+    const r = res[t];
+    if (r) lines.push(`    "${t}": (${r.narrow}, ${r.wide}, ${r.avg}),`);
+  }
+  lines.push('}\n');
+
+  lines.push('# 4. Replace _char_pixel_width to use per-font table (fontTag, not font_size):');
+  lines.push('def _char_pixel_width(ch: str, fontTag: str) -> float:');
+  lines.push('    narrow, wide, avg = _CHAR_WIDTHS.get(fontTag, _CHAR_WIDTHS["gui-3"])');
+  lines.push('    if ch in _NARROW_CHARS: return narrow');
+  lines.push('    if ch in _WIDE_CHARS:   return wide');
+  lines.push('    return avg\n');
+
+  lines.push('# 5. Update get_text_line_width to pass fontTag instead of fs:');
+  lines.push('def get_text_line_width(fontTag: str, textToMeasure: str) -> int:');
+  lines.push('    if not textToMeasure: return 0');
+  lines.push('    return int(sum(_char_pixel_width(ch, fontTag) for ch in textToMeasure))\n');
+
+  // median of per-font ratios as a simple alternative
+  const med = (arr) => {
+    const s = [...arr].sort((a, b) => a - b);
+    const m = Math.floor(s.length / 2);
+    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+  };
+  const ts = TAGS.filter(t => res[t]);
+  const nr = ts.map(t => res[t].narrow / res[t].line_height);
+  const wr = ts.map(t => res[t].wide   / res[t].line_height);
+  const ar = ts.map(t => res[t].avg    / res[t].line_height);
+  lines.push('# Alternative: single-multiplier ratios relative to _font_size()');
+  lines.push(`# (less accurate across font families but simpler to maintain)`);
+  lines.push(`# narrow = ${med(nr).toFixed(3)}  (was 0.35)`);
+  lines.push(`# wide   = ${med(wr).toFixed(3)}  (was 0.75)`);
+  lines.push(`# avg    = ${med(ar).toFixed(3)}  (was 0.55)`);
+
+  return lines.join('\n');
+}
+
+(function () {
+  const btn   = document.getElementById('measure-btn');
+  const modal = document.getElementById('measure-modal');
+  const out   = document.getElementById('measure-output');
+  const close = document.getElementById('measure-close');
+  const copy  = document.getElementById('measure-copy');
+
+  btn.addEventListener('click', async () => {
+    out.textContent = 'Waiting for fonts…';
+    modal.classList.add('visible');
+    await document.fonts.ready;
+    out.textContent = 'Measuring…';
+    requestAnimationFrame(() => {
+      try {
+        out.textContent = _measureFormatOutput(_measureFonts());
+      } catch (e) {
+        out.textContent = 'Error: ' + e;
+      }
+    });
+  });
+
+  close.addEventListener('click', () => modal.classList.remove('visible'));
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') modal.classList.remove('visible');
+  });
+  copy.addEventListener('click', () => {
+    navigator.clipboard.writeText(out.textContent);
+    copy.textContent = 'Copied!';
+    setTimeout(() => copy.textContent = 'Copy', 2000);
+  });
+})();
 </script>
 </body>
 </html>
