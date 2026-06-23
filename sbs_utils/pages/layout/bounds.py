@@ -1,3 +1,4 @@
+from ...mast.parsers import LayoutAreaParser
 from ...mast.mast_globals import MastGlobals
 
 class Bounds:
@@ -217,41 +218,49 @@ def is_out_of_bounds(child, parent, tolerance=0.0):
     Does not make any changes to anything, is purely a helper function.
 
     Args:
-        child (layout_item): The child layout item
-        parent (layout_item): The parent layout item
+        child (Bounds): The child layout item's bounds
+        parent (Bounds): The parent layout item's bounds
         tolerance (float, optional): The amount that the child is allowed to be outside its parent and still be visible. Default is 0.0.
 
     Returns:
         bool: True if it is out of bounds, False if it is within bounds.
     """        
-    if child.bounds is None:
-        c_bounds = Bounds(child.left, child.top, child.right, child.bottom)
-    else:
-        c_bounds = child.bounds
-    # print(f"Child Bounds: {c_bounds}")
     
-    if parent.bounds is None:
-        p_bounds = Bounds(parent.left, parent.top, parent.right, parent.bottom)
-    else:
-        p_bounds = parent.bounds
-    # print(f"Parent Bounds: {p_bounds}")
-    
-    if c_bounds.left > p_bounds.right + tolerance:
+    if child.left > parent.right + tolerance:
         return True
-    if c_bounds.right < p_bounds.left - tolerance:
+    if child.right < parent.left - tolerance:
         return True
-    if c_bounds.top > p_bounds.bottom + tolerance:
+    if child.top > parent.bottom + tolerance:
         return True
-    if c_bounds.bottom < p_bounds.top - tolerance:
+    if child.bottom < parent.top - tolerance:
         return True
     
     # Now we just do a quick check to make sure that the child is actually on the screen. If not, then we treat it as out of bounds.
-    # if c_bounds.left > 100:
+    # if child.left > 100:
     #     return True
-    # if c_bounds.top > 100:
+    # if child.top > 100:
     #     return True
-    # if c_bounds.right < 0: 
+    # if child.right < 0: 
     #     return True
-    # if c_bounds.bottom < 0:
+    # if child.bottom < 0:
     #     return True
     return False
+
+
+def calc_bounds(att, aspect_ratio, font_size):
+    if att is not None:
+        if not isinstance(att, Bounds):
+            i = 1
+            values=[]
+            for ast in att:
+                if i >0:
+                    ratio =  aspect_ratio.x
+                else:
+                    ratio =  aspect_ratio.y
+                i=-i
+                if ratio == 0:
+                    ratio = 1
+                values.append(LayoutAreaParser.compute(ast, None,ratio,font_size))
+            return Bounds(*values)
+    return att
+
