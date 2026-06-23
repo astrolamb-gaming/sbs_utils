@@ -1,5 +1,7 @@
+from ..layout.column import Column
+from ..layout.row import Row
 from ...gui import get_client_aspect_ratio
-from ..layout import layout as layout
+from ..layout.layout import Layout
 from ..layout.clickable import Clickable
 from ...helpers import FrameContext, FakeEvent
 from ...mast.parsers import LayoutAreaParser
@@ -57,7 +59,7 @@ class SubPage:
         self.pending_row.add(layout_item)
 
     def add_row(self):
-        self.pending_row = layout.Row()
+        self.pending_row = Row()
         # Rows have tags for background and/or clickable
         self.pending_row.tag = self.get_tag()
         self.active_layout.add(self.pending_row)
@@ -71,9 +73,9 @@ class SubPage:
 
         if layout_item is None:
             tag = self.get_tag()
-            layout_item = layout.Layout(tag, None, 0,0, 100, 90)
+            layout_item = Layout(tag, None, 0,0, 100, 90)
             apply_control_styles(".section", style, layout_item, self.gui_task)
-            p_row = layout.Row()
+            p_row = Row()
             p_row.tag = self.get_tag()
             layout_item.add(p_row)
 
@@ -91,7 +93,7 @@ class SubPage:
         
         if add:
             if p_row is None:
-                p_row = layout.Row()
+                p_row = Row()
                 p_row.tag = self.get_tag()
                 self.active_layout.add(p_row)
 
@@ -126,7 +128,7 @@ class LayoutListBoxHeader:
 
 
 
-class LayoutListbox(layout.Column):
+class LayoutListbox(Column):
     """
       A widget to list things passing function/lamdas to get the data needed for option display of
        a template 
@@ -293,7 +295,7 @@ class LayoutListbox(layout.Column):
                     last_visual_indent = item.visual_indent
 
             
-            sec = layout.Layout("unused", None, 0, 0, 100, 100)
+            sec = Layout("unused", None, 0, 0, 100, 100)
             sub_page.next_slot(slot, sec)
             slot+=1
             #
@@ -545,7 +547,7 @@ class LayoutListbox(layout.Column):
                 
             
 
-            sec = layout.Layout(tag+":sec", None, left+item_indent, top, this_right, this_bottom, 100)
+            sec = Layout(tag+":sec", None, left+item_indent, top, this_right, this_bottom, 100)
             sec.region_tag = self.local_region_tag
             sec.item_index = i
             

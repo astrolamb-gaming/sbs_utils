@@ -1,4 +1,5 @@
-from ..layout import layout as layout
+from ..layout.layout import Layout
+from ..layout.column import Column
 from ...helpers import FrameContext, FakeEvent
 from ...procedural.gui.gui import gui_percent_from_pixels, gui_page_for_client, gui_task_for_client
 from ...agent import Agent
@@ -22,7 +23,7 @@ import traceback
 #   Objective Announcements
 #   Message: Face + Title + Text
 
-class TabbedPanel(layout.Column):
+class TabbedPanel(Column):
     def __init__(self, left, top, right, bottom, tag_prefix, panels=None, tab=0, tab_location=0, icon_size=0) -> None:
         super().__init__(left,top, right, bottom)
         self.tag_prefix = tag_prefix
@@ -76,7 +77,7 @@ class TabbedPanel(layout.Column):
             restore = FrameContext.page 
             sub_page = SubPage(self.tag_prefix, self.local_region_tag, restore.gui_task, CID)
             FrameContext.page = sub_page
-            sec = layout.Layout(self.tag_prefix+":subsec", None, left, top, left+width, top+height)
+            sec = Layout(self.tag_prefix+":subsec", None, left, top, left+width, top+height)
             sec.region_tag = self.local_region_tag
             sec.item_index = 0
             sub_page.next_slot(0, sec)

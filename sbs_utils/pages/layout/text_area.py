@@ -1,4 +1,6 @@
-from .layout import Column, Bounds, get_font_size
+from .column import Column
+from .bounds import Bounds
+from .font import get_font_size
 from ...helpers import FrameContext, split_props, merge_props
 from ...gui import get_client_aspect_ratio
 from textwrap import TextWrapper

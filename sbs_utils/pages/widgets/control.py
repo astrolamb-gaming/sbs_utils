@@ -1,8 +1,8 @@
-from ..layout import layout as layout
+from ..layout.column import Column
 from ...helpers import FrameContext
 
 
-class Control(layout.Column):
+class Control(Column):
     def __init__(self, left, top, right, bottom) -> None:
         super().__init__(left,top, right, bottom)
         self.region = None
