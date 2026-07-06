@@ -20,7 +20,8 @@ class Button(Column):
         
         if self.background_color is not None:
             bg = Bounds(self.bounds)
-            bg.grow(self.padding)
+            bg.shrink(self.margin)
+            bg.shrink(self.border)
             # NOTE: sbs.send_gui_colorbutton uses the `color` parameter for the background color.
             # If there's a better way to do this, feel free to make it so. But it works great as is.
             # What we're doing is swapping out any existing `color` attributes and adding a new one, with the value for self.background_color.
@@ -37,19 +38,23 @@ class Button(Column):
         ctx = FrameContext.context
         message = self.message
         message += self.get_cascade_props(True, True, True)
+
+        bg = Bounds(self.bounds)
+        bg.shrink(self.margin)
+        bg.shrink(self.border)
         
         if self.raw:
             ctx.sbs.send_gui_rawiconbutton(event.client_id, self.region_tag,
                 self.tag, message, 
-                self.bounds.left, self.bounds.top, self.bounds.right, self.bounds.bottom)
+                bg.left, bg.top, bg.right, bg.bottom)
         elif self.icon:
             ctx.sbs.send_gui_iconbutton(event.client_id, self.region_tag,
                 self.tag, message, 
-                self.bounds.left, self.bounds.top, self.bounds.right, self.bounds.bottom)
+                bg.left, bg.top, bg.right, bg.bottom)
         elif self.background_color is None:
             ctx.sbs.send_gui_button(event.client_id, self.region_tag,
                 self.tag, message, 
-                self.bounds.left, self.bounds.top, self.bounds.right, self.bounds.bottom)
+                bg.left, bg.top, bg.right, bg.bottom)
         else:
             # Since background-color is specified, we have to do this a bit differently.
             # sbs.send_gui_button() can only change the color of the text, not the background.
@@ -59,11 +64,30 @@ class Button(Column):
             if message.find("draw_layer") == -1:
                 message = "draw_layer:10000;" + message # draw layer has to be high or the button covers the text
 
-            # TODO: Find a way to use padding so the text isn't righ up close to the edge of the button's border.
+            bg.shrink(self.padding)
             ctx.sbs.send_gui_text(event.client_id, self.region_tag,
                 self.tag+"_text", message, 
-                self.bounds.left, self.bounds.top, self.bounds.right, self.bounds.bottom)
+                bg.left, bg.top, bg.right, bg.bottom)
             
+    def calc_minimum_bounds(self):
+
+        # We'll use this value regardless
+        mb = super().calc_minimum_bounds()
+        if mb is None:
+            print("Column min bounds is None")
+            return Bounds(0,0,0,0)
+
+        # Get the text
+        props = split_props(self.message, "$text")
+        text = props.get("$text", props.get("text"))
+        if text is None:
+            return mb
+
+        # default_width is None unless it has an actual value, in which case it is given that max width.
+        bounds_area = self.get_bounds_for_text(text, self.default_width)
+        
+        bounds_area.grow(mb)
+        return bounds_area
         
 
     def update(self, message):

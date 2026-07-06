@@ -1,3 +1,5 @@
+from .font import get_font_size
+from ...mast.parsers import LayoutAreaParser
 from .bounds import Bounds, is_out_of_bounds
 from .column import Column
 from .clickable import Clickable
@@ -7,8 +9,6 @@ import weakref
 
 class Row:
     def __init__(self, cols=None, width=0, height=0) -> None:
-        # self.height = height
-        # self.width = width
         self.columns = cols if cols else []
         left=0
         top=0
@@ -28,6 +28,7 @@ class Row:
         """
         Used to determine if true bounds should be used, or if hidden bounds should be used instead. Primary purpose of this is for presenting. When NOT presenting, the true bounds should be used for calculations. If presenting, we hide a gui element (if applicable) using `Bounds.hidden`.
         """
+        self.min_bounds = None
 
         self.padding = None
         self.border = None
@@ -43,8 +44,16 @@ class Row:
         self.default_color = None
         self.default_justify = None
         self.default_font = None
-        self.default_height = None
         self.default_width = None
+        """
+        `default_width` is set by calling :class:`Row`.:meth:`set_col_width` in style.py.
+        It could be an integer or any style string, e.g. `5px` or `2em`.
+        """
+        self.default_height = None
+        """
+        `default_height` is set by calling :class:`Row`.:meth:`set_row_height` in style.py.
+        It could be an integer or any style string, e.g. `5px` or `2em`.
+        """
 
         self.background_color = None
         self.background_image = "smallWhite"
@@ -126,6 +135,9 @@ class Row:
 
     @bounds.setter
     def bounds(self, v):
+        """
+        Never set the bounds if you want to hide it. Getting row.bounds will always return the appropriate bounds if it is hidden. Use `row.show(False)` to hide it instead.
+        """
         self._bounds = v
 
     @property
@@ -217,21 +229,36 @@ class Row:
                 padding.bottom)
 
     def _present(self, event):
+
+        bounds = Bounds(self.bounds)
+        bounds.shrink(self.margin)
+        bounds.shrink(self.border)
+        bounds.shrink(self.padding)
         col:Column
         for col in self.columns:
             # If it's not in the bounds of its parent, or if the parent is not hidden, then set _is_shown to False.
             if self.is_hidden:
                 col._is_shown = False
             else:
-                col._is_shown = not is_out_of_bounds(col, self)
+                cb = Bounds(col.bounds)
+                col._is_shown = True#not is_out_of_bounds(cb, bounds)
+                print(f"Is Shown: {col._is_shown} --- {col}")
                 if col._is_shown:
                     # Clamp the child's bounds to be within its parents' bounds if they overlap.
-                    if col.bounds.is_on_boundary(self.bounds):
+                    if cb.is_on_boundary(bounds):
                         min_bounds = col.calc_minimum_bounds()
-                        if col.bounds.width < min_bounds.width or col.bounds.height < min_bounds.height:
-                            col._is_shown = False
+                        if min_bounds is None:
+                            print("min_bounds is None in Row._present()")
+                            min_bounds = Bounds(0,0,0,0)
+
+                        # Somehow this is causing the gui_sub_section to be hidden. Why?
+                        if bounds.width < min_bounds.width or bounds.height < min_bounds.height:
+                            print(f"\n\nWidth: {bounds.width}\nMin Width: {min_bounds.width}\nHeight: {bounds.height}\nMin Height: {min_bounds.height}\n\n")
+                            print("Not within bounds")
+                            # col._is_shown = False
                         # else:
-                        col.bounds.clamp(self.bounds)
+                        cb.clamp(bounds)
+                        col.bounds = cb
 
             col.present(event)
         self._post_present(event)
@@ -261,19 +288,59 @@ class Row:
                 self.click_tag, click_props,
                 bounds.left, bounds.top, bounds.right, bounds.bottom)
             
-    def calc_minimum_bounds(self):
+    def get_size_from_stylestring(self, style, aspect_ratio_axis):
         """
-        Find the bounds of the largest child column and use the child's bounds as the minimum.
+        Compute the style to its corresponding value as a percentage of the screen size.
+        Args:
+            style (str | int | None): The style to parse.
+            aspect_ratio_axis (int): The size of the applicable axis, in pixels. Usually gotten using `get_client_aspect_ratio().x` or `.y`.
+        Returns:
+            int: The percentage of the screen the style indicates.
+        """
+        # style = getattr(self, style, None)
+        if style is not None:
+            if not isinstance(style, float):
+                font_size = get_font_size(self.font)
+                nodes = LayoutAreaParser.compute(style, None, aspect_ratio_axis, font_size)
+                # return LayoutAreaParser.parse_e2(nodes)
+                return nodes
+        return style
+
+    def calc_content_min_bounds(self):
+        """
+        Calculate the minimum required bounds of the children.
         """
         width = 0
         height = 0
+        col:Column
         for col in self.columns:
             mb = col.calc_minimum_bounds()
+
+            col.min_bounds = mb # Save this on the child for later use.
+
+            if mb is None:
+                print("mb is None in Row.calc_minimum_bounds()")
+                mb = Bounds(0,0,0,0)
+
+            # For a row, we find the column with the greatest minimum height and use that height as the minimum.
             if mb.height > height:
                 height = mb.height
-            if mb.width > width:
-                width = mb.width
-        return Bounds(0,0,width,height)
+            
+            # Total the widths of all the columns
+            width += mb.width
+
+        mb = Bounds(0,0,width,height)
+        return mb
+
+    def calc_minimum_bounds(self, available_width=None):
+        """
+        Find the bounds of the largest child column and use the child's bounds as the minimum.
+        """
+        mb = self.calc_content_min_bounds()
+        mb.grow(self.margin)
+        mb.grow(self.border)
+        mb.grow(self.padding)
+        return mb
 
     def is_message_for(self, event):
         """Used by MessageTrigger i.e. gui_message to know if message is for this object

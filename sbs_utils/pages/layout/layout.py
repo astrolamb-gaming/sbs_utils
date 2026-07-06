@@ -1,17 +1,18 @@
 from ...gui import get_client_aspect_ratio
 from ...helpers import FrameContext
-from ...mast.parsers import LayoutAreaParser
+from ...mast.parsers import LayoutAreaParser, StyleDefinition
 from enum import IntEnum
-from .bounds import Bounds, is_out_of_bounds
+from .bounds import Bounds, is_out_of_bounds, calc_bounds
+from .font import get_font_size
+from .column import Column
 from .hole import Hole
 # for type hints
 from .row import Row 
-from .column import Column
 from .dirty import Dirty
 
 import weakref
         
-
+# TODO: Coudn't this be simplified to just use name, element, aspect_ratio, and font_size?
 def calc_float_attribute(name, col, row, sec, aspect_ratio_axis, font_size):
     att = None
     if col is not None and hasattr(col, name)and getattr(col, name, None) is not None:
@@ -49,37 +50,6 @@ def cascade_attribute(name, col, row, sec):
 #         att = getattr(sec, name, None)
 
 #     return calc_bounds(att, aspect_ratio, font_size)
-
-def calc_bounds(att, aspect_ratio, font_size):
-    if att is not None:
-        if not isinstance(att, Bounds):
-            i = 1
-            values=[]
-            for ast in att:
-                if i >0:
-                    ratio =  aspect_ratio.x
-                else:
-                    ratio =  aspect_ratio.y
-                i=-i
-                if ratio == 0:
-                    ratio = 1
-                values.append(LayoutAreaParser.compute(ast, None,ratio,font_size))
-            return Bounds(*values)
-    return att
-                
-def get_font_size(font):
-    if font is not None:
-        font = font.strip().lower()
-    sizes = {             # MIN  2k 4k
-        "smallest": 18,   # LB   -- -- 
-        "gui-1": 22,      # BD   LB -- 
-        "gui-2": 24,      # H3   BD LB 
-        "gui-3": 28,      # H2   H3 BD  
-        "gui-4": 32,      # H1   H2 H3
-        "gui-5": 36,      # TT   H1 H2
-        "gui-6": 52,      # __   TT H1/TT
-    }
-    return sizes.get(font, 30)
 
 class RegionType(IntEnum):
     SECTION_AREA_ABSOLUTE = 0,       # Not a window layout, Old school layout
@@ -189,8 +159,12 @@ class Layout(Clickable):
             # If we're not presenting yet, then we don't want to use Bounds.hidden at all.
             return self._bounds
         # If we are presenting, then we need to check if Bounds.hidden should be used instead.
-        if self._show and self._is_shown:
+        if not self.is_hidden:
+            print("Layout Visible")
             return self._bounds
+        print("Layout Hidden")
+        print(f"_show: {self._show}")
+        print(f"_is_shown: {self._is_shown}")
         return Bounds.hidden
 
     @bounds.setter
@@ -320,33 +294,87 @@ class Layout(Clickable):
     def represent(self, event):
         if self.client_id is None:
             return
-        #self.representing = True
-        # if self.region_type == RegionType.SECTION_AREA_ABSOLUTE:
-        #     self.calc(event.client_id)
-        #     self.present(event)
-        #     #self.representing = False
-        #     return
-        # el
-        # print(f"Recalculating Layout")
-        # self.calc(event.client_id)
-        # self.present(event)
-        if not self._show:
-            # self.calc(event.client_id)
-            self.present(event)
-            #self.representing = False
-            return
-        else:  # is_hidden 
-            
-            self.present(event)
-            # #self.calc(event.client_id)
-            # self.region_begin(event.client_id)
-            # self.invalidate_children()
-            # self.region_end(event.client_id)
-        #self.representing = False
+        self.present(event)
 
+
+
+        # Then if we know the number of columns, and the total available width, we can calculate the expected allotted space for each column.
+        # Next, we compare the minimum width of each column with the inital allocated space.
+        # If the min width of a column is greater than the allocated space, we subtract its width from the total available width.
+        # We also total up the minimum widths for all the columns.
         
+        # Next, we find the difference between the available space and the minimum width totals.
+
+        # If there is more available space than the minimum required, we allocate it out.
+            # We divide this value by the number of flexible columns in the row.
+            # This gives us the width of all the flexible columns (should be the same).
+
+        # If there is LESS available space than the minumum required:
+            # Try to widen the layout area? 
+                # This should be the default behavior if the layout size is NOT set.
+            ###### Hide the rightmost element until the remaining ones fit at their minimum values? 
+                # This should be default behavior if the layout size is set.
+
+            # Implement a built-in scrollbar for the row/layout?
+            # Intentionally allow the rightmost elements to spill over? This would show the scripter that there's a space issue, but for dynamically generated stuff they might not notice an issue but it could come up in live games.
+            # IMO the scroll layout should be used if it's possible for things to spill over like that.
+
+
+    def _distribute_axis_sizes(self, total_space, min_sizes, preferred_sizes, flex_mask):
+        """
+        Distribute available space across an axis while respecting minimum sizes.
+
+        Minimum sizes are always honored when possible. Any remaining space is used
+        to satisfy preferred sizes first, then split across flexible items.
+        """
+        if len(min_sizes) == 0:
+            return []
+
+        total_space = max(float(total_space), 0.0)
+        sizes = [max(float(v or 0.0), 0.0) for v in min_sizes]
+
+        minimum_total = sum(sizes)
+        if minimum_total > total_space and minimum_total > 0:
+            # Not enough room for all minimums: keep proportions to avoid overlap.
+            shrink = total_space / minimum_total
+            return [size * shrink for size in sizes]
+
+        remaining = total_space - minimum_total
+
+        unmet_preferred = []
+        total_needed = 0.0
+        for i, preferred in enumerate(preferred_sizes):
+            if preferred is None:
+                continue
+            target = max(float(preferred), sizes[i])
+            if target > sizes[i]:
+                need = target - sizes[i]
+                unmet_preferred.append((i, need, target))
+                total_needed += need
+
+        if remaining > 0 and total_needed > 0:
+            if total_needed <= remaining:
+                for i, _, target in unmet_preferred:
+                    sizes[i] = target
+                remaining -= total_needed
+            else:
+                for i, need, _ in unmet_preferred:
+                    sizes[i] += remaining * (need / total_needed)
+                remaining = 0.0
+
+        if remaining > 0:
+            grow_indices = [i for i, is_flex in enumerate(flex_mask) if is_flex]
+            if len(grow_indices) == 0:
+                grow_indices = list(range(len(sizes)))
+            grow_by = remaining / len(grow_indices)
+            for i in grow_indices:
+                sizes[i] += grow_by
+
+        return sizes
 
     def calc(self, client_id):
+        print("Calculating Layout")
+        layout_min_bounds = self.calc_contents_min_bounds()
         aspect_ratio = get_client_aspect_ratio(client_id)
         self.client_id = client_id
         
@@ -379,29 +407,13 @@ class Layout(Clickable):
             bounds_area.shrink(self.border)
             bounds_area.shrink(self.padding)
             
-            if self.default_height is not None:
-                layout_row_height = calc_float_attribute("default_height", None, None, self, aspect_ratio.y, 20)
-            else:
-                layout_row_height = bounds_area.height
-                flex_rows = len(rows)
-                for row in rows:
-                    row_font = self.default_font
-                    if row.default_font is not None:
-                        row_font = row.default_font
+            row: Row
 
-                    if row.default_height is not None:
-                        row_font_height  = get_font_size(row_font)
-                        value = calc_float_attribute("default_height", None, row, self, aspect_ratio.y, row_font_height)
-                        layout_row_height -= value
-                        flex_rows -= 1
-                        
-                if flex_rows>0:
-                    layout_row_height /= flex_rows
-            
-            row : Row
-            row_top = bounds_area.top
-            row_bottom = bounds_area.bottom
-            
+            visible_rows = []
+            row_min_heights = []
+            row_preferred_heights = []
+            row_flex_mask = []
+
             for row in rows:
                 #
                 # REGION STUFF
@@ -417,12 +429,44 @@ class Layout(Clickable):
                 row.padding =Bounds(calc_bounds(row.padding_style, aspect_ratio, row_font_height))
                 row.border =Bounds(calc_bounds(row.border_style, aspect_ratio, row_font_height))
 
-                # This is for drawing background and border?
-                if row.default_height is not None:
-                    row_height = calc_float_attribute("default_height", None, row, None,  aspect_ratio.y, row_font_height)
-                else:
-                    row_height = layout_row_height
+                # SET Parent
+                row.parent = self
+                row.client_id = client_id
 
+                if not row._show:
+                    continue
+
+                row.min_bounds = row.calc_minimum_bounds()
+                min_height = max(row.min_bounds.height if row.min_bounds is not None else 0, 0)
+                preferred_height = calc_float_attribute("default_height", None, row, self, aspect_ratio.y, row_font_height)
+                if preferred_height is not None:
+                    preferred_height = max(preferred_height, min_height)
+
+                visible_rows.append(row)
+                row_min_heights.append(min_height)
+                row_preferred_heights.append(preferred_height)
+                row_flex_mask.append(preferred_height is None)
+
+            if len(visible_rows) == 0:
+                return
+
+            row_heights = self._distribute_axis_sizes(
+                bounds_area.height,
+                row_min_heights,
+                row_preferred_heights,
+                row_flex_mask,
+            )
+
+            row_top = bounds_area.top
+            row_bottom = bounds_area.bottom
+
+            for i, row in enumerate(visible_rows):
+                row_height = row_heights[i]
+                row_font = row.default_font
+                if row_font is None:
+                    row_font = self.default_font
+
+                # This is for drawing background and border?
                 row_bounds_area = Bounds(bounds_area)
                 # row_bounds_area.height = row_height
                 #row.left = bounds_area.left
@@ -436,95 +480,98 @@ class Layout(Clickable):
                     row_bottom -= row_height
                     row_bounds_area.top = row_bottom
 
+                # TODO: Why are we using row.left etc, instead of just row.bounds?
                 row.left = row_bounds_area.left
                 row.top = row_bounds_area.top
                 row.right = row_bounds_area.right
                 row.bottom = row_bounds_area.bottom
                 row.width = row.right - row.left
                 row.height = row.bottom - row.top
-                # SET Parent
-                row.parent = self
                 
                 row.bounds = Bounds(row_bounds_area)
                 row_bounds_area.shrink(row.margin)
                 row_bounds_area.shrink(row.padding)
                 row_bounds_area.shrink(row.border)
 
-                squares = 0
-
-                col: Column
+                col: Column # What if col is actually a Layout? E.g. sub sections
                 if len(row.columns)==0:
                     continue
-                
-                actual_cols = []
-                assigned_space = 0
-                assigned_cols = 0
-                for col in row.columns:
-                    if not col._show: 
-                        # We don't care at this point if the column is out of bounds, so _is_shown is irrelevant.
-                        continue
-                    squares += 1 if col.square else 0
-                    col_font = row_font
-                    if col_font is None:
-                        col_font = col.default_font
 
-                    col_font_size  = get_font_size(col_font)
-                    default_width = calc_float_attribute("default_width", col, row, self, aspect_ratio.x, col_font_size)
-                    if default_width is not None:
-                        assigned_space += default_width
-                        assigned_cols += 1
+                actual_cols = []
+                for col in row.columns:
+                    col.client_id = client_id
+                    if not col._show: 
+                        # We don't care at this point if the column is out of bounds, so col._is_shown is irrelevant.
+                        # But if the user has set col.show(False), which is read by col.show, then we ignore the column completely.
+                        continue
 
                     actual_cols.append(col)
 
                 if len(actual_cols)==0:
                     continue
-                
-                # get the width and the height of a cell in pixels
-                actual_width = row_bounds_area.width/len(actual_cols) * aspect_ratio.x / 100
-                actual_height =  row_bounds_area.height * aspect_ratio.y /100
 
-                # get the low of these two as a percentage of the window width
-                if actual_height < actual_width:
-                    square_width = (actual_height/aspect_ratio.x) * 100
-                    square_height = (actual_height/aspect_ratio.y) * 100
-                else:
-                    square_width = (actual_width/aspect_ratio.x) *100
-                    square_height = (actual_width/aspect_ratio.y) * 100
+                # Compute target square size from the row bounds and average cell width.
+                actual_width = row_bounds_area.width / len(actual_cols) * aspect_ratio.x / 100
+                actual_height = row_bounds_area.height * aspect_ratio.y / 100
+                square_side = min(actual_height, actual_width)
+                square_width = (square_side / aspect_ratio.x) * 100
+                square_height = (square_side / aspect_ratio.y) * 100
 
-                if len(actual_cols) != squares:
-                    need_assigned = max(len(actual_cols)-squares-assigned_cols,1)
-                    rect_col_width = (row_bounds_area.width-assigned_space-(squares*square_width))/need_assigned
-                    if square_width> rect_col_width:
-                        square_width= rect_col_width
-                        rect_col_width = (row_bounds_area.width-(squares*square_width))/need_assigned
-                else:
-                    rect_col_width = square_width
+                col_min_widths = []
+                col_preferred_widths = []
+                col_flex_mask = []
+                equal_col_width = 0
+                if len(actual_cols) > 0:
+                    equal_col_width = row_bounds_area.width / len(actual_cols)
 
-                # bit of a hack to make sure face aren't the biggest things
-                col_left = row_bounds_area.left
-                hole_size = 0
                 for col in actual_cols:
                     col_font = row_font
                     if col_font is None:
                         col_font = col.default_font
                     col.font = col_font
-                    col_font_size  = get_font_size(col_font)
 
+                    col_font_size  = get_font_size(col_font)
                     col.margin = Bounds(calc_bounds(col.margin_style, aspect_ratio, col_font_size))
                     col.padding =Bounds(calc_bounds(col.padding_style, aspect_ratio, col_font_size))
                     col.border =Bounds(calc_bounds(col.border_style, aspect_ratio, col_font_size))
 
-                    col_bounds_area = Bounds(row_bounds_area)
-                    col_bounds_area.left = col_left
-                    
-                    assigned_space = rect_col_width
+                    col.min_bounds = col.calc_minimum_bounds()
+                    min_width = col.min_bounds.width
                     default_width = calc_float_attribute("default_width", col, row, self, aspect_ratio.x, col_font_size)
-                    if default_width is not None:
-                        assigned_space = default_width
-
 
                     if col.square:
-                        col_bounds_area.width = square_width
+                        min_width = max(min_width, square_width)
+                        preferred_width = min_width
+                        is_flex = False
+                    elif default_width is not None:
+                        preferred_width = max(default_width, min_width)
+                        is_flex = False
+                    else:
+                        # Flex columns should still try to split space evenly.
+                        preferred_width = max(equal_col_width, min_width)
+                        is_flex = True
+
+                    col_min_widths.append(max(min_width, 0))
+                    col_preferred_widths.append(preferred_width)
+                    col_flex_mask.append(is_flex)
+
+                col_widths = self._distribute_axis_sizes(
+                    row_bounds_area.width,
+                    col_min_widths,
+                    col_preferred_widths,
+                    col_flex_mask,
+                )
+
+                # bit of a hack to make sure face aren't the biggest things
+                col_left = row_bounds_area.left
+                hole_size = 0
+                for col, assigned_space in zip(actual_cols, col_widths):
+
+                    col_bounds_area = Bounds(row_bounds_area)
+                    col_bounds_area.left = col_left
+
+                    if col.square:
+                        col_bounds_area.width = max(assigned_space, square_width)
                         col_bounds_area.height = square_height
                         # Square ignores holes?
                         hole_size = 0
@@ -538,9 +585,10 @@ class Layout(Clickable):
 
                     col_left = col_bounds_area.right
 
-                    col_bounds_area.shrink(col.margin)
-                    col_bounds_area.shrink(col.border)
-                    col_bounds_area.shrink(col.padding)
+                    # We now assume that bounds is the outer edge, so we don't need these.
+                    # col_bounds_area.shrink(col.margin)
+                    # col_bounds_area.shrink(col.border)
+                    # col_bounds_area.shrink(col.padding)
 
                     
 
@@ -572,22 +620,36 @@ class Layout(Clickable):
                     # SET Parent
                     col.parent = self
 
-                    col.calc(client_id)
+                    # TODO: Not sure yet if this is needed/helpful
+                    # col.calc(client_id)
 
-
-    def calc_minimum_bounds(self):
+    def calc_contents_min_bounds(self):
         """
-        Find the bounds of the largest child row and use the child's bounds as the minimum.
+        Calculate the minimum required bounds of the children.
         """
         width = 0
         height = 0
         for row in self.rows:
             mb = row.calc_minimum_bounds()
-            if mb.height > height:
-                height = mb.height
+            row.min_bounds = mb # save this on the child for later use
+            
+            # We need to add the minimum height of every row together.
+            height += mb.height
+
             if mb.width > width:
                 width = mb.width
-        return Bounds(0,0,width,height)
+        mb = Bounds(0,0,width,height)
+        return mb
+
+    def calc_minimum_bounds(self, available_width=None):
+        """
+        Find the bounds of the widest child row and use the child's bounds as the minimum width.
+        """
+        mb = self.calc_contents_min_bounds()
+        mb.grow(self.margin)
+        mb.grow(self.border)
+        mb.grow(self.padding)
+        return mb
 
     @property
     def click_tag(self):
@@ -614,6 +676,8 @@ class Layout(Clickable):
     
     def present(self, event):
         self.calc(event.client_id)
+        # is_presenting makes the bounds use Bounds.hidden if it should be hidden.
+        # This is only applicable while presenting.
         self.is_presenting = True
         self.region_begin(event.client_id)
         self._pre_present(event)
@@ -623,18 +687,27 @@ class Layout(Clickable):
         self.is_presenting = False
 
     def _pre_present(self, event):
-        pass
 
-    def _present(self, event):
-        # Sections are different their bounds are the whole container
-
-        bounds = Bounds(self.bounds)
-        
         ctx = FrameContext.context
-        border = Bounds(bounds)
+        
+        
+        # # DEBUG draw whole bounds
+        # bounds = Bounds(self.bounds)
+        # props = f"image:{self.background_image}; color: #102938;"
+        # ctx.sbs.send_gui_image(event.client_id, self.region_tag,
+        #     "__bg:"+self.tag, props,
+        #     bounds.left, 
+        #     bounds.top, 
+        #     bounds.right, 
+        #     bounds.bottom)
+
+        # if self.margin is not None:
+        #     print(f"Bounds: {self.bounds}")
+        #     print(f"Margin: {self.margin}")
+        #     print(f"Border: {self.border}")
+        border = Bounds(self.bounds)
         border.shrink(self.margin)
-        padding= Bounds(border)
-        padding.shrink(self.border)
+        
    
         if self.border is not None and self.border_color is not None:
             bb_props = f"image:{self.border_image}; color:{self.border_color};draw_layer:1000;"
@@ -644,8 +717,11 @@ class Layout(Clickable):
                 border.top, 
                 border.right, 
                 border.bottom)
-            
+        
         if self.background_color is not None:
+            padding = Bounds(border)
+            padding.shrink(self.border)
+
             props = f"image:{self.background_image}; color:{self.background_color};draw_layer:1000;"
             ctx.sbs.send_gui_image(event.client_id, self.region_tag,
                 "__bg:"+self.tag, props,
@@ -654,6 +730,15 @@ class Layout(Clickable):
                 padding.right, 
                 padding.bottom)
 
+
+    def _present(self, event):
+        # Sections are different their bounds are the whole container
+
+
+        bounds = Bounds(self.bounds)
+        bounds.shrink(self.margin)
+        bounds.shrink(self.border)
+        bounds.shrink(self.padding)
             
         row:Row
         for row in self.rows:
@@ -661,15 +746,20 @@ class Layout(Clickable):
             if self.is_hidden:
                 row._is_shown = False
             else:
-                row._is_shown = not is_out_of_bounds(row, self)
+                rb = Bounds(row.bounds)
+                row._is_shown = not is_out_of_bounds(rb, bounds)
+                if rb.is_on_boundary(bounds):
+                    row.is_shown = False
                 if row._is_shown:
                     # Clamp the child's bounds to be within its parents' bounds if they overlap.
-                    if row.bounds.is_on_boundary(self.bounds):
+                    
+                    if rb.is_on_boundary(bounds):
                         min_bounds = row.calc_minimum_bounds()
-                        if row.bounds.width < min_bounds.width or row.bounds.height < min_bounds.height:
+                        if rb.width < min_bounds.width or rb.height < min_bounds.height:
                             row._is_shown = False
-                        # else:
-                        row.bounds.clamp(self.bounds)
+                        else:
+                            rb.clamp(bounds)
+                            row.bounds = rb
 
             # We still want to present all children, because if we don't, then we get ghost gui elements
             row.present(event)

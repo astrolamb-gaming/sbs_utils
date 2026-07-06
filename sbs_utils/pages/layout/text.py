@@ -1,3 +1,4 @@
+from .bounds import Bounds
 from .column import Column
 from ...helpers import FrameContext, merge_props, split_props
 
@@ -11,9 +12,13 @@ class Text(Column):
     def _present(self, event):
         ctx = FrameContext.context
         message = self.message + self.get_cascade_props(True, True, True)
+        bounds = Bounds(self.bounds)
+        bounds.shrink(self.margin)
+        bounds.shrink(self.border)
+        bounds.shrink(self.padding)
         ctx.sbs.send_gui_text(event.client_id, self.region_tag,
             self.tag, message,
-            self.bounds.left, self.bounds.top, self.bounds.right, self.bounds.bottom)
+            bounds.left, bounds.top, bounds.right, bounds.bottom)
 
     def update(self, message):
         props = split_props(message, "$text")
@@ -28,6 +33,26 @@ class Text(Column):
         self.message = message
         if not self.is_hidden:
             self.mark_visual_dirty()
+
+    def calc_minimum_bounds(self):
+
+        # We'll use this value regardless
+        mb = super().calc_minimum_bounds()
+        if mb is None:
+            print("Column min bounds is None")
+            return Bounds(0,0,0,0)
+
+        # Get the text
+        props = split_props(self.message, "$text")
+        text = props.get("$text", props.get("text"))
+        if text is None:
+            return mb
+
+        # default_width is None unless it has an actual value, in which case it is given that max width.
+        bounds_area = self.get_bounds_for_text(text, self.default_width)
+        
+        bounds_area.grow(mb)
+        return bounds_area
 
     
     @property

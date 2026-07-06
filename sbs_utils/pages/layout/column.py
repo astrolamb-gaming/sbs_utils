@@ -1,13 +1,19 @@
-from .bounds import Bounds, is_out_of_bounds
+from ...mast.parsers import LayoutAreaParser
+from ...gui import get_client_aspect_ratio
+from .font import get_font_size
+from ...procedural.gui.style import gui_style_def
+from .bounds import Bounds, is_out_of_bounds, calc_bounds
 from ...helpers import FrameContext
 from ...agent import Agent
 from .clickable import Clickable
 from .dirty import Dirty
+import math as math
 import weakref
 
 class Column:
     def __init__(self, left=0, top=0, right=0, bottom=0) -> None:
         self._bounds = Bounds(left,top,right,bottom)
+        self.min_bounds = None
 
         self.padding = None
         self.border = None
@@ -32,8 +38,19 @@ class Column:
         self.default_font = None
 
         self.square = False
+        """
+        `square` is a boolean flag indicating if the column is literally a square when presented. Its bounds will be adjusted based on minimum available hieght/width, whichever is smaller.
+        """
         self.default_width = None
+        """
+        `default_width` is set by calling :class:`Column`.:meth:`set_col_width` in style.py.
+        It could be an integer or any style string, e.g. `5px` or `2em`.
+        """
         self.default_height = None
+        """
+        `default_height` is set by calling :class:`Column`.:meth:`set_row_height` in style.py.
+        It could be an integer or any style string, e.g. `5px` or `2em`.
+        """
         
         self.tag = None
         self.region_tag = ""
@@ -101,6 +118,7 @@ class Column:
 
     @property
     def bounds(self):
+        # return self._bounds
         if not self.is_presenting:
             # If we're not presenting yet, then we don't want to use Bounds.hidden at all.
             return self._bounds
@@ -181,6 +199,25 @@ class Column:
             return self.default_font
         return self.font
     
+    def get_size_from_stylestring(self, style, aspect_ratio_axis):
+        """
+        Compute the style to its corresponding value as a percentage of the screen size.
+        Args:
+            style (str | int | None): The style to parse.
+            aspect_ratio_axis (int): The size of the applicable axis, in pixels. Usually gotten using `get_client_aspect_ratio().x` or `.y`.
+        Returns:
+            int: The percentage of the screen the style indicates.
+        """
+        # style = getattr(self, style, None)
+        if style is not None:
+            
+            if not isinstance(style, float):
+                font_size = get_font_size(self.get_font())
+                nodes = LayoutAreaParser.compute(style, None, aspect_ratio_axis, font_size)
+                # return LayoutAreaParser.parse_e2(nodes)
+                return nodes
+        return style
+    
     def calc_minimum_bounds(self):
         """
         Get the minimum bounds for use by the parent row.
@@ -192,13 +229,18 @@ class Column:
         Returns:
             Bounds: The bounds object representing the minimum bounds of this column.
         """
-        width = self.default_width
-        height = self.default_height
+        aspect_ratio = get_client_aspect_ratio(self.client_id)
+        width = self.get_size_from_stylestring(self.default_width, aspect_ratio.x)
+        height = self.get_size_from_stylestring(self.default_width, aspect_ratio.y)
         if width is None:
             width = 0
         if height is None:
             height = 0
-        return Bounds(0,0,width,height)
+        mb = Bounds(0,0,width,height)
+        mb.grow(self.padding)
+        mb.grow(self.border)
+        mb.grow(self.margin)
+        return mb
         
     
     def get_cascade_props(self,font = False, color = False, justify = False):
@@ -229,6 +271,10 @@ class Column:
         self.present(event)
 
     def present(self, event):
+        # if self.is_hidden:
+        #     print("Column is Hidden!!!")
+        #     print(self._bounds)
+        #     print(self.tag)
         self.client_id = event.client_id
         self.is_presenting = True
         self._pre_present(event)
@@ -243,8 +289,8 @@ class Column:
         ctx = FrameContext.context
         if self.border is not None and self.border_color is not None:
             bb = Bounds(self.bounds)
-            bb.grow(self.padding)
-            bb.grow(self.border)
+            bb.shrink(self.margin)
+
             bb_props = f"image:{self.border_image}; color:{self.border_color};draw_layer:1000;"
             ctx.sbs.send_gui_image(event.client_id, self.region_tag,
                 "__bb:"+self.tag, bb_props,
@@ -258,7 +304,9 @@ class Column:
             # Layout Calc fills this in
             #
             bg = Bounds(self.bounds)
-            bg.grow(self.padding)
+            bg.shrink(self.margin)
+            bg.shrink(self.border)
+            # bg.shrink(self.padding)
             ctx.sbs.send_gui_image(event.client_id, self.region_tag,
                 "__bg:"+self.tag, props,
                 bg.left, bg.top, bg.right, bg.bottom)
@@ -284,8 +332,10 @@ class Column:
             #
             #
             bounds = Bounds(self.bounds)
-            if self.padding is not None:
-                bounds.grow(self.padding)
+            bounds.shrink(self.margin)
+            bounds.shrink(self.border)
+            # if self.padding is not None:
+            #     bounds.shrink(self.padding)
             
             ctx.sbs.send_gui_clickregion(event.client_id, self.region_tag,
                 self.click_tag, click_props,
@@ -294,6 +344,104 @@ class Column:
 
     def invalidate_regions(self):
         pass
+
+
+    # I decided to leave this here instead of moving it to bounds.py because it needs the font and client_id information for the current client/object/scope
+    def get_bounds_for_text(self, text, max_width=None):
+        """
+        Get the Bounds area taken up by the specified text. If `max_width` is None, then it will assume the text does not wrap.
+        
+        Args:
+            text (str): The text
+            max_width (str|int): If an integer, is the maximum allowable percent width. If a string, is parsed as a stylestring represntative of the maximum allowable width, e.g. "200px" or "5em".
+        Returns:
+            Bounds: The Bounds of the text.
+        """
+        sbs = FrameContext.context.sbs
+        font = self.get_font()
+        if font is None:
+            font = "gui-1"
+        font = font.strip() # Often has a leading space, which the engine doesn't account for!!!
+
+        sec_font_size = get_font_size(font)
+        aspect_ratio = get_client_aspect_ratio(self.client_id)
+
+        width = None
+        height = None
+
+        print(f"Getting bounds for text:\n-----{text}")
+        print(f"Max width: {max_width}")
+
+        if max_width is not None:
+            # Max width could be in any format, so we parse it's value and convert it to the pixel values, to match the sbs function's needs.
+
+            if max_width.is_decimal():
+                # In this case we're assuming a percent.
+                pixels = max_width/100*aspect_ratio
+
+            else:
+                # Convert the long complicated way...
+                area_style = f"area: 0,0,{max_width},0;"
+                style = gui_style_def(area_style).get("area")
+                percent = Bounds(calc_bounds(style, aspect_ratio, sec_font_size)).width
+                pixels = percent/100*aspect_ratio
+
+
+            # These return *pixel* values, not %, so we have to convert
+            pixels = math.ceil(pixels) #pixels must be an int
+            height = sbs.get_text_block_height(font, text, pixels)
+            width = pixels
+        else:
+            # These return *pixel* values, not %, so we have to convert
+            height = sbs.get_text_line_height(font,text)
+            width = sbs.get_text_line_width(font, text)
+        
+        # THese must be ints
+        height = math.ceil(height)
+        width = math.ceil(width)
+
+        # Should only be -1 if there's an issue with how the engine interprets the font
+        if height == -1 or width == -1:
+            print(f"Min -1 for {text}")
+            return Bounds(0,0,0,0)
+        
+        print(f"Width: {width}    Height: {height}")
+        
+        # Now we do the conversion from pixels
+        area_style = f"area: 0,0,{width}px,{height}px;"
+        style = gui_style_def(area_style).get("area")
+        return Bounds(calc_bounds(style, aspect_ratio, sec_font_size))
+
+    def get_min_text_width(self,text):
+        """
+        Returns the minimum width of the text, in % of screen width.
+        Finds the longest word in the text and uses that as the width.
+        Then gets the bounds of the text using that word's width.
+        
+        Args:
+            text (str): The text
+        Returns:
+            int: The width of the longest word in the text.
+        """
+        longest_word = max(text.split(), key=len)
+        return self.get_bounds_for_text(longest_word).width
+
+    def get_min_text_height(self,text,width=None):
+        """
+        Gets the minimum height of the text with the specified width.
+        Intended to be used to get the height of text if you are limited by width.
+        E.g. if you use :func:`get_min_text_width`, and use the result as the width.
+
+        Args:
+            text (str): The text
+            max_width (str|int): If an integer, is the maximum allowable percent width. If a string, is parsed as a stylestring represntative of the maximum allowable width, e.g. "200px" or "5em".
+        Returns:
+            int: the height of the text, constrained by the width.
+        """
+        if width is None:
+            return self.get_bounds_for_text(text).height
+        else:
+            return self.get_bounds_for_text(text,width).width
 
     def is_message_for(self, event):
         """Used by MessageTrigger i.e. gui_message to know if message is for this object
@@ -351,4 +499,43 @@ class Column:
     def value(self, a):
         pass
         
+
+"""
+This should probably be put in the docs somewhere, but for now:
+
+NOTE: Padding, Margin, Border
+
+`self._bounds` is always the entire bounds of the gui element, including the contents area, the padding, the border, and the margins.
+
+Margins are the outer gaps between other elements and the layout item's *apparent* boundary.
+
+Border is another outer gap inside of the margin, but which can be colored. 
+- Note: If using `border`, you must also specify `border-color` or it won't be used.
+- Note: If you use `border`, if you don't specify a `background`, then the background will be filled with the border's color.
+
+Padding is an inner gap between the gui element's contents and its border.
+
+
+Universal order of operations to handle these:
+_pre_present: 
+	- Bounds.shrink(margin)
+	- Draw border
+	- Bounds.shrink(border)
+	- Draw background
+
+_present:
+	- Bounds.shrink(margin)
+	- Bounds.shrink(border)
+    - Account for extra things like sliders
+    - Present self (if applicable, e.g. send_gui_text)
+	- Bounds.shrink(padding)
+	- Present children (if applicable)
+
+_post_present:
+	- Bounds.shrink(margin)
+	- Bounds.shrink(border)
+	- Draw extra things like sliders
+    - Draw clickregion
+
+"""
 
