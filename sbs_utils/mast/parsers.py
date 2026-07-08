@@ -7,6 +7,9 @@ class LayoutAreaNode:
         self.value = value
         self.children = []
 
+    def __str__(self):
+        return f"token_type: {self.token_type}\nvalue: {self.value};\nchildren: {self.children}"
+
 # based on https://github.com/gnebehay/parser/blob/master/parser.py
 class LayoutAreaParser:
     rules = {

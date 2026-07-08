@@ -1,4 +1,4 @@
-from ...mast.parsers import LayoutAreaParser
+from ...mast.parsers import LayoutAreaParser, LayoutAreaNode
 from ...gui import get_client_aspect_ratio
 from .font import get_font_size
 from ...procedural.gui.style import gui_style_def
@@ -369,22 +369,24 @@ class Column:
         width = None
         height = None
 
-        print(f"Getting bounds for text:\n-----{text}")
-        print(f"Max width: {max_width}")
+        # print(f"Getting bounds for text:\n-----{text}")
+        # print(f"Max width: {max_width}")
 
         if max_width is not None:
             # Max width could be in any format, so we parse it's value and convert it to the pixel values, to match the sbs function's needs.
 
-            if max_width.is_decimal():
+            if isinstance(max_width, LayoutAreaNode):
+                max_width = max_width.value
+            if max_width.isdecimal():
                 # In this case we're assuming a percent.
-                pixels = max_width/100*aspect_ratio
+                pixels = int(max_width)/100*aspect_ratio.x
 
             else:
                 # Convert the long complicated way...
                 area_style = f"area: 0,0,{max_width},0;"
                 style = gui_style_def(area_style).get("area")
                 percent = Bounds(calc_bounds(style, aspect_ratio, sec_font_size)).width
-                pixels = percent/100*aspect_ratio
+                pixels = percent/100*aspect_ratio.x
 
 
             # These return *pixel* values, not %, so we have to convert
