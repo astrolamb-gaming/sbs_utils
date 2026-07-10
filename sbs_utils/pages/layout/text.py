@@ -40,10 +40,10 @@ class Text(Column):
         #     if mb.width > self.min_bounds.width or mb.height > self.min_bounds.height:
         #         self.mark_layout_dirty()
 
-    def calc_minimum_bounds(self):
+    def calc_minimum_bounds(self, available_width=None):
 
         # We'll use this value regardless
-        mb = super().calc_minimum_bounds()
+        mb = super().calc_minimum_bounds(available_width)
         if mb is None:
             print("Column min bounds is None")
             return Bounds(0,0,0,0)
@@ -55,7 +55,8 @@ class Text(Column):
             return mb
 
         # default_width is None unless it has an actual value, in which case it is given that max width.
-        bounds_area = self.get_bounds_for_text(text, self.default_width)
+        max_width = available_width if available_width is not None else self.default_width
+        bounds_area = self.get_bounds_for_text(text, max_width)
 
         bounds_area.grow(mb)
         return bounds_area

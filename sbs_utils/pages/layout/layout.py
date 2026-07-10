@@ -372,6 +372,119 @@ class Layout(Clickable):
 
         return sizes
 
+    def _calculate_row_column_widths(self, row, row_content_bounds, aspect_ratio, row_font, client_id):
+        """
+        Calculate column widths for a row using the current row content bounds.
+        Returns visible columns, their widths, and computed square sizes.
+        """
+        actual_cols = []
+        for col in row.columns:
+            col.client_id = client_id
+            if not col._show:
+                continue
+            actual_cols.append(col)
+
+        if len(actual_cols) == 0:
+            return [], [], 0, 0
+
+        actual_width = row_content_bounds.width / len(actual_cols) * aspect_ratio.x / 100
+        actual_height = row_content_bounds.height * aspect_ratio.y / 100
+        square_side = min(actual_height, actual_width)
+        square_width = (square_side / aspect_ratio.x) * 100 if aspect_ratio.x != 0 else 0
+        square_height = (square_side / aspect_ratio.y) * 100 if aspect_ratio.y != 0 else 0
+
+        col_min_widths = []
+        col_preferred_widths = []
+        col_flex_mask = []
+        variable_col_indices = []
+        fixed_col_widths = [None] * len(actual_cols)
+        fixed_col_total_width = 0
+        equal_col_width = row_content_bounds.width / len(actual_cols)
+
+        for col_index, col in enumerate(actual_cols):
+            col_font = row_font if row_font is not None else col.default_font
+            col.font = col_font
+
+            col_font_size = get_font_size(col_font)
+            col.margin = Bounds(calc_bounds(col.margin_style, aspect_ratio, col_font_size))
+            col.padding = Bounds(calc_bounds(col.padding_style, aspect_ratio, col_font_size))
+            col.border = Bounds(calc_bounds(col.border_style, aspect_ratio, col_font_size))
+
+            default_width = calc_float_attribute("default_width", col, row, self, aspect_ratio.x, col_font_size)
+            if default_width is not None:
+                fixed_width = max(default_width, 0)
+                fixed_col_widths[col_index] = fixed_width
+                fixed_col_total_width += fixed_width
+                continue
+
+            col.min_bounds = col.calc_minimum_bounds()
+            min_width = col.min_bounds.width
+
+            if col.square:
+                min_width = max(min_width, square_width)
+                preferred_width = min_width
+                is_flex = False
+            else:
+                preferred_width = max(equal_col_width, min_width)
+                is_flex = True
+
+            col_min_widths.append(max(min_width, 0))
+            col_preferred_widths.append(preferred_width)
+            col_flex_mask.append(is_flex)
+            variable_col_indices.append(col_index)
+
+        col_widths = [0] * len(actual_cols)
+        for fixed_index, fixed_width in enumerate(fixed_col_widths):
+            if fixed_width is not None:
+                col_widths[fixed_index] = fixed_width
+
+        variable_space = row_content_bounds.width - fixed_col_total_width
+        variable_col_widths = self._distribute_axis_sizes(
+            max(variable_space, 0),
+            col_min_widths,
+            col_preferred_widths,
+            col_flex_mask,
+        )
+        for variable_index, width in zip(variable_col_indices, variable_col_widths):
+            col_widths[variable_index] = width
+
+        return actual_cols, col_widths, square_width, square_height
+
+    def _calculate_row_required_content_height(self, row, row_content_bounds, aspect_ratio, row_font, client_id):
+        """
+        Calculate the minimum required row content height after column widths are known.
+        """
+        actual_cols, col_widths, _, _ = self._calculate_row_column_widths(
+            row,
+            row_content_bounds,
+            aspect_ratio,
+            row_font,
+            client_id,
+        )
+        if len(actual_cols) == 0:
+            return 0
+
+        required_content_height = 0
+        for col, assigned_width in zip(actual_cols, col_widths):
+            if col.__class__ == Hole:
+                continue
+
+            col_content_width = assigned_width
+            if col.margin is not None:
+                col_content_width -= col.margin.left + col.margin.right
+            if col.border is not None:
+                col_content_width -= col.border.left + col.border.right
+            if col.padding is not None:
+                col_content_width -= col.padding.left + col.padding.right
+            if col_content_width < 0:
+                col_content_width = 0
+
+            measured_min_bounds = col.calc_minimum_bounds(col_content_width)
+            if measured_min_bounds is not None and measured_min_bounds.height > required_content_height:
+                required_content_height = measured_min_bounds.height
+
+        return required_content_height
+
     def calc(self, client_id):
         print("Calculating Layout")
         layout_min_bounds = self.calc_contents_min_bounds()
@@ -416,6 +529,7 @@ class Layout(Clickable):
             row_preferred_heights = []
             row_flex_mask = []
             fixed_row_total_height = 0
+            row_fonts = []
 
             for row in rows:
                 #
@@ -442,22 +556,62 @@ class Layout(Clickable):
                 preferred_height = calc_float_attribute("default_height", None, row, self, aspect_ratio.y, row_font_height)
 
                 visible_rows.append(row)
+                row_fonts.append(row_font)
                 if preferred_height is not None:
                     # Explicit row-height is fixed and should not be resized.
                     fixed_height = max(preferred_height, 0)
                     fixed_row_heights.append(fixed_height)
                     fixed_row_total_height += fixed_height
                 else:
-                    row.min_bounds = row.calc_minimum_bounds()
-                    min_height = max(row.min_bounds.height if row.min_bounds is not None else 0, 0)
                     fixed_row_heights.append(None)
                     variable_row_indices.append(len(visible_rows) - 1)
-                    row_min_heights.append(min_height)
+                    row_min_heights.append(0)
                     row_preferred_heights.append(None)
                     row_flex_mask.append(True)
 
             if len(visible_rows) == 0:
                 return
+
+            # Width-first ordering for variable rows: estimate row content height,
+            # calculate per-row column widths, then derive row minimum heights.
+            if len(variable_row_indices) > 0:
+                estimated_variable_outer_height = max(
+                    (bounds_area.height - fixed_row_total_height) / len(variable_row_indices),
+                    0,
+                )
+                for list_index, variable_row_index in enumerate(variable_row_indices):
+                    row = visible_rows[variable_row_index]
+                    row_font = row_fonts[variable_row_index]
+
+                    estimated_row_content_bounds = Bounds(
+                        bounds_area.left,
+                        bounds_area.top,
+                        bounds_area.right,
+                        bounds_area.top + estimated_variable_outer_height,
+                    )
+                    estimated_row_content_bounds.shrink(row.margin)
+                    estimated_row_content_bounds.shrink(row.padding)
+                    estimated_row_content_bounds.shrink(row.border)
+
+                    required_content_height = self._calculate_row_required_content_height(
+                        row,
+                        estimated_row_content_bounds,
+                        aspect_ratio,
+                        row_font,
+                        client_id,
+                    )
+
+                    row_vertical_chrome = 0
+                    if row.margin is not None:
+                        row_vertical_chrome += row.margin.top + row.margin.bottom
+                    if row.padding is not None:
+                        row_vertical_chrome += row.padding.top + row.padding.bottom
+                    if row.border is not None:
+                        row_vertical_chrome += row.border.top + row.border.bottom
+
+                    min_height = max(required_content_height + row_vertical_chrome, 0)
+                    row_min_heights[list_index] = min_height
+                    row.min_bounds = Bounds(0, 0, 0, min_height)
 
             row_heights = [0] * len(visible_rows)
             for fixed_index, fixed_height in enumerate(fixed_row_heights):
@@ -514,87 +668,15 @@ class Layout(Clickable):
                 if len(row.columns)==0:
                     continue
 
-                actual_cols = []
-                for col in row.columns:
-                    col.client_id = client_id
-                    if not col._show: 
-                        # We don't care at this point if the column is out of bounds, so col._is_shown is irrelevant.
-                        # But if the user has set col.show(False), which is read by col.show, then we ignore the column completely.
-                        continue
-
-                    actual_cols.append(col)
-
-                if len(actual_cols)==0:
-                    continue
-
-                # Compute target square size from the row bounds and average cell width.
-                actual_width = row_bounds_area.width / len(actual_cols) * aspect_ratio.x / 100
-                actual_height = row_bounds_area.height * aspect_ratio.y / 100
-                square_side = min(actual_height, actual_width)
-                square_width = (square_side / aspect_ratio.x) * 100
-                square_height = (square_side / aspect_ratio.y) * 100
-
-                col_min_widths = []
-                col_preferred_widths = []
-                col_flex_mask = []
-                variable_col_indices = []
-                fixed_col_widths = [None] * len(actual_cols)
-                fixed_col_total_width = 0
-                equal_col_width = 0
-                if len(actual_cols) > 0:
-                    equal_col_width = row_bounds_area.width / len(actual_cols)
-
-                for col_index, col in enumerate(actual_cols):
-                    col_font = row_font
-                    if col_font is None:
-                        col_font = col.default_font
-                    col.font = col_font
-
-                    col_font_size  = get_font_size(col_font)
-                    col.margin = Bounds(calc_bounds(col.margin_style, aspect_ratio, col_font_size))
-                    col.padding =Bounds(calc_bounds(col.padding_style, aspect_ratio, col_font_size))
-                    col.border =Bounds(calc_bounds(col.border_style, aspect_ratio, col_font_size))
-                    default_width = calc_float_attribute("default_width", col, row, self, aspect_ratio.x, col_font_size)
-
-                    # Explicitly sized columns are fixed-width and do not participate
-                    # in flex redistribution.
-                    if default_width is not None:
-                        fixed_width = max(default_width, 0)
-                        fixed_col_widths[col_index] = fixed_width
-                        fixed_col_total_width += fixed_width
-                        continue
-
-                    col.min_bounds = col.calc_minimum_bounds()
-                    min_width = col.min_bounds.width
-
-                    if col.square:
-                        min_width = max(min_width, square_width)
-                        preferred_width = min_width
-                        is_flex = False
-                    else:
-                        # Flex columns should still try to split space evenly.
-                        preferred_width = max(equal_col_width, min_width)
-                        is_flex = True
-
-                    col_min_widths.append(max(min_width, 0))
-                    col_preferred_widths.append(preferred_width)
-                    col_flex_mask.append(is_flex)
-                    variable_col_indices.append(col_index)
-
-                col_widths = [0] * len(actual_cols)
-                for fixed_index, fixed_width in enumerate(fixed_col_widths):
-                    if fixed_width is not None:
-                        col_widths[fixed_index] = fixed_width
-
-                variable_space = row_bounds_area.width - fixed_col_total_width
-                variable_col_widths = self._distribute_axis_sizes(
-                    max(variable_space, 0),
-                    col_min_widths,
-                    col_preferred_widths,
-                    col_flex_mask,
+                actual_cols, col_widths, square_width, square_height = self._calculate_row_column_widths(
+                    row,
+                    row_bounds_area,
+                    aspect_ratio,
+                    row_font,
+                    client_id,
                 )
-                for variable_index, width in zip(variable_col_indices, variable_col_widths):
-                    col_widths[variable_index] = width
+                if len(actual_cols) == 0:
+                    continue
 
                 # bit of a hack to make sure face aren't the biggest things
                 col_left = row_bounds_area.left

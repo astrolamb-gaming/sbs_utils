@@ -218,7 +218,7 @@ class Column:
                 return nodes
         return style
     
-    def calc_minimum_bounds(self):
+    def calc_minimum_bounds(self, available_width=None):
         """
         Get the minimum bounds for use by the parent row.
         If the parent's bounds are smaller than the column's bounds, in either the horizontal or vertical direction, the column will be hidden to prevent overlapping gui elements.
@@ -378,17 +378,19 @@ class Column:
 
             if isinstance(max_width, LayoutAreaNode):
                 max_width = max_width.value
-            if max_width.isdecimal():
-                # In this case we're assuming a percent.
-                pixels = int(max_width)/100*aspect_ratio.x
+            if isinstance(max_width, str):
+                if max_width.isdecimal():
+                    # In this case we're assuming a percent.
+                    pixels = int(max_width)/100*aspect_ratio.x
 
+                else:
+                    # Convert the long complicated way...
+                    area_style = f"area: 0,0,{max_width},0;"
+                    style = gui_style_def(area_style).get("area")
+                    percent = Bounds(calc_bounds(style, aspect_ratio, sec_font_size)).width
+                    pixels = percent/100*aspect_ratio.x
             else:
-                # Convert the long complicated way...
-                area_style = f"area: 0,0,{max_width},0;"
-                style = gui_style_def(area_style).get("area")
-                percent = Bounds(calc_bounds(style, aspect_ratio, sec_font_size)).width
-                pixels = percent/100*aspect_ratio.x
-
+                pixels = int(max_width)/100*aspect_ratio.x
 
             # These return *pixel* values, not %, so we have to convert
             pixels = math.ceil(pixels) #pixels must be an int
