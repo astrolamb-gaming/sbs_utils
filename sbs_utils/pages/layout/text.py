@@ -34,6 +34,12 @@ class Text(Column):
         if not self.is_hidden:
             self.mark_visual_dirty()
 
+        # TODO: Find a good way to only recalculate a row instead of the whole layout.
+        # if self.min_bounds:
+        #     mb = self.calc_minimum_bounds()
+        #     if mb.width > self.min_bounds.width or mb.height > self.min_bounds.height:
+        #         self.mark_layout_dirty()
+
     def calc_minimum_bounds(self):
 
         # We'll use this value regardless
@@ -50,7 +56,7 @@ class Text(Column):
 
         # default_width is None unless it has an actual value, in which case it is given that max width.
         bounds_area = self.get_bounds_for_text(text, self.default_width)
-        
+
         bounds_area.grow(mb)
         return bounds_area
 

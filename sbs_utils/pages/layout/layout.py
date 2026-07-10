@@ -410,9 +410,12 @@ class Layout(Clickable):
             row: Row
 
             visible_rows = []
+            fixed_row_heights = []
+            variable_row_indices = []
             row_min_heights = []
             row_preferred_heights = []
             row_flex_mask = []
+            fixed_row_total_height = 0
 
             for row in rows:
                 #
@@ -436,26 +439,40 @@ class Layout(Clickable):
                 if not row._show:
                     continue
 
-                row.min_bounds = row.calc_minimum_bounds()
-                min_height = max(row.min_bounds.height if row.min_bounds is not None else 0, 0)
                 preferred_height = calc_float_attribute("default_height", None, row, self, aspect_ratio.y, row_font_height)
-                if preferred_height is not None:
-                    preferred_height = max(preferred_height, min_height)
 
                 visible_rows.append(row)
-                row_min_heights.append(min_height)
-                row_preferred_heights.append(preferred_height)
-                row_flex_mask.append(preferred_height is None)
+                if preferred_height is not None:
+                    # Explicit row-height is fixed and should not be resized.
+                    fixed_height = max(preferred_height, 0)
+                    fixed_row_heights.append(fixed_height)
+                    fixed_row_total_height += fixed_height
+                else:
+                    row.min_bounds = row.calc_minimum_bounds()
+                    min_height = max(row.min_bounds.height if row.min_bounds is not None else 0, 0)
+                    fixed_row_heights.append(None)
+                    variable_row_indices.append(len(visible_rows) - 1)
+                    row_min_heights.append(min_height)
+                    row_preferred_heights.append(None)
+                    row_flex_mask.append(True)
 
             if len(visible_rows) == 0:
                 return
 
-            row_heights = self._distribute_axis_sizes(
-                bounds_area.height,
+            row_heights = [0] * len(visible_rows)
+            for fixed_index, fixed_height in enumerate(fixed_row_heights):
+                if fixed_height is not None:
+                    row_heights[fixed_index] = fixed_height
+
+            variable_space = bounds_area.height - fixed_row_total_height
+            variable_row_heights = self._distribute_axis_sizes(
+                max(variable_space, 0),
                 row_min_heights,
                 row_preferred_heights,
                 row_flex_mask,
             )
+            for variable_index, height in zip(variable_row_indices, variable_row_heights):
+                row_heights[variable_index] = height
 
             row_top = bounds_area.top
             row_bottom = bounds_area.bottom
@@ -520,11 +537,14 @@ class Layout(Clickable):
                 col_min_widths = []
                 col_preferred_widths = []
                 col_flex_mask = []
+                variable_col_indices = []
+                fixed_col_widths = [None] * len(actual_cols)
+                fixed_col_total_width = 0
                 equal_col_width = 0
                 if len(actual_cols) > 0:
                     equal_col_width = row_bounds_area.width / len(actual_cols)
 
-                for col in actual_cols:
+                for col_index, col in enumerate(actual_cols):
                     col_font = row_font
                     if col_font is None:
                         col_font = col.default_font
@@ -534,17 +554,22 @@ class Layout(Clickable):
                     col.margin = Bounds(calc_bounds(col.margin_style, aspect_ratio, col_font_size))
                     col.padding =Bounds(calc_bounds(col.padding_style, aspect_ratio, col_font_size))
                     col.border =Bounds(calc_bounds(col.border_style, aspect_ratio, col_font_size))
+                    default_width = calc_float_attribute("default_width", col, row, self, aspect_ratio.x, col_font_size)
+
+                    # Explicitly sized columns are fixed-width and do not participate
+                    # in flex redistribution.
+                    if default_width is not None:
+                        fixed_width = max(default_width, 0)
+                        fixed_col_widths[col_index] = fixed_width
+                        fixed_col_total_width += fixed_width
+                        continue
 
                     col.min_bounds = col.calc_minimum_bounds()
                     min_width = col.min_bounds.width
-                    default_width = calc_float_attribute("default_width", col, row, self, aspect_ratio.x, col_font_size)
 
                     if col.square:
                         min_width = max(min_width, square_width)
                         preferred_width = min_width
-                        is_flex = False
-                    elif default_width is not None:
-                        preferred_width = max(default_width, min_width)
                         is_flex = False
                     else:
                         # Flex columns should still try to split space evenly.
@@ -554,13 +579,22 @@ class Layout(Clickable):
                     col_min_widths.append(max(min_width, 0))
                     col_preferred_widths.append(preferred_width)
                     col_flex_mask.append(is_flex)
+                    variable_col_indices.append(col_index)
 
-                col_widths = self._distribute_axis_sizes(
-                    row_bounds_area.width,
+                col_widths = [0] * len(actual_cols)
+                for fixed_index, fixed_width in enumerate(fixed_col_widths):
+                    if fixed_width is not None:
+                        col_widths[fixed_index] = fixed_width
+
+                variable_space = row_bounds_area.width - fixed_col_total_width
+                variable_col_widths = self._distribute_axis_sizes(
+                    max(variable_space, 0),
                     col_min_widths,
                     col_preferred_widths,
                     col_flex_mask,
                 )
+                for variable_index, width in zip(variable_col_indices, variable_col_widths):
+                    col_widths[variable_index] = width
 
                 # bit of a hack to make sure face aren't the biggest things
                 col_left = row_bounds_area.left

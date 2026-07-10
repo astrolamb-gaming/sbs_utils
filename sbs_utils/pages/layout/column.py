@@ -231,7 +231,7 @@ class Column:
         """
         aspect_ratio = get_client_aspect_ratio(self.client_id)
         width = self.get_size_from_stylestring(self.default_width, aspect_ratio.x)
-        height = self.get_size_from_stylestring(self.default_width, aspect_ratio.y)
+        height = self.get_size_from_stylestring(self.default_height, aspect_ratio.y)
         if width is None:
             width = 0
         if height is None:
@@ -371,6 +371,7 @@ class Column:
 
         # print(f"Getting bounds for text:\n-----{text}")
         # print(f"Max width: {max_width}")
+        # text = text + " "
 
         if max_width is not None:
             # Max width could be in any format, so we parse it's value and convert it to the pixel values, to match the sbs function's needs.
@@ -394,6 +395,7 @@ class Column:
             height = sbs.get_text_block_height(font, text, pixels)
             width = pixels
         else:
+            # print("width is None")
             # These return *pixel* values, not %, so we have to convert
             height = sbs.get_text_line_height(font,text)
             width = sbs.get_text_line_width(font, text)
@@ -419,6 +421,7 @@ class Column:
         Returns the minimum width of the text, in % of screen width.
         Finds the longest word in the text and uses that as the width.
         Then gets the bounds of the text using that word's width.
+        Assumes that the text can grow as much as needed in height.
         
         Args:
             text (str): The text
