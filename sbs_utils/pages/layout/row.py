@@ -242,7 +242,7 @@ class Row:
             else:
                 cb = Bounds(col.bounds)
                 col._is_shown = True#not is_out_of_bounds(cb, bounds)
-                print(f"Is Shown: {col._is_shown} --- {col}")
+                # print(f"Is Shown: {col._is_shown} --- {col}")
                 if col._is_shown:
                     # Clamp the child's bounds to be within its parents' bounds if they overlap.
                     if cb.is_on_boundary(bounds):
