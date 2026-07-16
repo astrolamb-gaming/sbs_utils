@@ -349,7 +349,7 @@ class Column:
     # I decided to leave this here instead of moving it to bounds.py because it needs the font and client_id information for the current client/object/scope
     def get_bounds_for_text(self, text, max_width=None):
         """
-        Get the Bounds area taken up by the specified text. If `max_width` is None, then it will assume the text does not wrap.
+        Get the Bounds area taken up by the specified text. If `max_width` is None, then it will use the smallest word in the text as the minimum width.
         
         Args:
             text (str): The text
@@ -399,8 +399,15 @@ class Column:
         else:
             # print("width is None")
             # These return *pixel* values, not %, so we have to convert
-            height = sbs.get_text_line_height(font,text)
-            width = sbs.get_text_line_width(font, text)
+            height = 0
+            width = 0
+            for t in text.split(" "):
+                h = sbs.get_text_line_height(font, t)
+                w = sbs.get_text_line_width(font, t)
+                if w > width:
+                    width = w
+                if h > height:
+                    height = h
         
         # THese must be ints
         height = math.ceil(height)
@@ -411,7 +418,7 @@ class Column:
             print(f"Min -1 for {text}")
             return Bounds(0,0,0,0)
         
-        print(f"Width: {width}    Height: {height}")
+        # print(f"Width: {width}    Height: {height}")
         
         # Now we do the conversion from pixels
         area_style = f"area: 0,0,{width}px,{height}px;"
