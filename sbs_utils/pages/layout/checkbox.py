@@ -1,3 +1,4 @@
+from .bounds import Bounds
 from .column import Column
 from ...helpers import FrameContext, merge_props, split_props
 
@@ -97,4 +98,27 @@ class Checkbox(Column):
     def value(self, v):
         self.update(v)
         self.update_variable()
+
+
+    def calc_minimum_bounds(self, available_width=None):
+
+        # We'll use this value regardless
+        mb = super().calc_minimum_bounds(available_width)
+        if mb is None:
+            print("Column min bounds is None")
+            return Bounds(0,0,0,0)
+
+        # Get the text
+        props = split_props(self.message, "$text")
+        text = props.get("$text", props.get("text"))
+        if text is None:
+            return mb
+
+        # default_width is None unless it has an actual value, in which case it is given that max width.
+        max_width = available_width if available_width is not None else self.default_width
+        
+        bounds_area = self.get_bounds_for_text(text, max_width)
+        bounds_area.right += bounds_area.bottom # This adds space for the checkbox itself.
+        bounds_area.grow(mb)
+        return bounds_area
 
