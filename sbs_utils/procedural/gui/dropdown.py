@@ -21,7 +21,7 @@ def gui_drop_down(props, style=None, var=None, data=None):
         Dropdown: The layout item created.
 
     Example:
-        gui_drop_down("items:Slow,Medium,Fast;", var="speed_setting")
+        gui_drop_down("$text:Slow;list:Slow,Medium,Fast;", var="speed_setting")
     """    
     page = FrameContext.page
     task = FrameContext.task
