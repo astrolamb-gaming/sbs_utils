@@ -354,10 +354,10 @@ def modifier_add(obj_or_id_or_set, key, value, source, flat_add_or_mult=1, durat
         # Check if the modifier exists
         mod_exists = modifier_exists(id, new_mod)
         if mod_exists:
-            print("This modifier already exists:", mod_exists)
-        
+            print(f"Modifier already exists:\n    Key: {key}\n    Source: {source}\n    Make sure you're using this in a shared scope.")
+            # We can't just return here because it could be looping over a list or set of objects. It's possible that some already have this modifier but others do not.
         # Add the new modifier
-        if not mod_exists:
+        else:
             all_mods.append(new_mod)
             ModifierHandler.all_modifiers.append(new_mod)
             # print("Adding modifier:", new_mod, " to object with id:", id)
