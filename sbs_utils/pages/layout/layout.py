@@ -397,9 +397,9 @@ class Layout(Clickable):
         col_preferred_widths = []
         col_flex_mask = []
         variable_col_indices = []
+        variable_col_min_width_by_index = {}
         fixed_col_widths = [None] * len(actual_cols)
         fixed_col_total_width = 0
-        equal_col_width = row_content_bounds.width / len(actual_cols)
 
         for col_index, col in enumerate(actual_cols):
             col_font = row_font if row_font is not None else col.default_font
@@ -425,13 +425,14 @@ class Layout(Clickable):
                 preferred_width = min_width
                 is_flex = False
             else:
-                preferred_width = max(equal_col_width, min_width)
+                preferred_width = None
                 is_flex = True
 
             col_min_widths.append(max(min_width, 0))
             col_preferred_widths.append(preferred_width)
             col_flex_mask.append(is_flex)
             variable_col_indices.append(col_index)
+            variable_col_min_width_by_index[col_index] = max(min_width, 0)
 
         col_widths = [0] * len(actual_cols)
         for fixed_index, fixed_width in enumerate(fixed_col_widths):
@@ -439,14 +440,104 @@ class Layout(Clickable):
                 col_widths[fixed_index] = fixed_width
 
         variable_space = row_content_bounds.width - fixed_col_total_width
+        available_variable_space = max(variable_space, 0)
+
+        if len(variable_col_indices) > 0:
+            equal_variable_col_width = available_variable_space / len(variable_col_indices)
+            for i, is_flex in enumerate(col_flex_mask):
+                if is_flex:
+                    col_preferred_widths[i] = max(equal_variable_col_width, col_min_widths[i])
+                elif col_preferred_widths[i] is None:
+                    col_preferred_widths[i] = col_min_widths[i]
+
         variable_col_widths = self._distribute_axis_sizes(
-            max(variable_space, 0),
+            available_variable_space,
             col_min_widths,
             col_preferred_widths,
             col_flex_mask,
         )
         for variable_index, width in zip(variable_col_indices, variable_col_widths):
             col_widths[variable_index] = width
+
+        balancing_indices = [
+            index for index, col in enumerate(actual_cols)
+            if fixed_col_widths[index] is None and not col.square
+        ]
+        if len(balancing_indices) >= 2:
+            best_required_widths = None
+
+            def measure_outer_height(col, outer_width):
+                col_content_width = outer_width
+                if col.margin is not None:
+                    col_content_width -= col.margin.left + col.margin.right
+                if col.border is not None:
+                    col_content_width -= col.border.left + col.border.right
+                if col.padding is not None:
+                    col_content_width -= col.padding.left + col.padding.right
+                if col_content_width < 0:
+                    col_content_width = 0
+
+                measured_min_bounds = col.calc_minimum_bounds(col_content_width)
+                if measured_min_bounds is None:
+                    return 0
+                return measured_min_bounds.height
+
+            current_heights = [measure_outer_height(actual_cols[index], col_widths[index]) for index in balancing_indices]
+            height_spread = max(current_heights) - min(current_heights)
+
+            if height_spread > 0.5:
+                def required_width_for_target_height(col, target_height, upper_bound):
+                    if col.__class__ == Hole:
+                        return 0.0
+
+                    upper_bound = max(float(upper_bound), 0.0)
+                    if upper_bound <= 0:
+                        return 0.0
+
+                    if measure_outer_height(col, upper_bound) > target_height:
+                        return upper_bound
+
+                    lower_bound = 0.0
+                    for _ in range(10):
+                        middle = (lower_bound + upper_bound) / 2.0
+                        if measure_outer_height(col, middle) <= target_height:
+                            upper_bound = middle
+                        else:
+                            lower_bound = middle
+                    return upper_bound
+
+                target_low = 0.0
+                target_high = max(current_heights)
+
+                for r in range(10):
+                    target_mid = (target_low + target_high) / 2.0
+                    required_widths = []
+                    required_total = 0.0
+
+                    for index in balancing_indices:
+                        required_width = required_width_for_target_height(actual_cols[index], target_mid, available_variable_space)
+                        required_width = max(required_width, variable_col_min_width_by_index.get(index, 0))
+                        required_widths.append(required_width)
+                        required_total += required_width
+                        if required_total > available_variable_space:
+                            break
+
+                    if required_total <= available_variable_space:
+                        target_high = target_mid
+                        best_required_widths = required_widths
+                    else:
+                        target_low = target_mid
+
+                if best_required_widths is not None and len(best_required_widths) == len(balancing_indices):
+                    preferred_widths = [col_widths[index] for index in balancing_indices]
+                    balanced_widths = self._distribute_axis_sizes(
+                        available_variable_space,
+                        best_required_widths,
+                        preferred_widths,
+                        [True] * len(balancing_indices),
+                    )
+                    for balance_index, width in zip(balancing_indices, balanced_widths):
+                        col_widths[balance_index] = width
 
         return actual_cols, col_widths, square_width, square_height
 
@@ -651,18 +742,7 @@ class Layout(Clickable):
                     row_bottom -= row_height
                     row_bounds_area.top = row_bottom
 
-                # TODO: Why are we using row.left etc, instead of just row.bounds?
-                row.left = row_bounds_area.left
-                row.top = row_bounds_area.top
-                row.right = row_bounds_area.right
-                row.bottom = row_bounds_area.bottom
-                row.width = row.right - row.left
-                row.height = row.bottom - row.top
                 
-                row.bounds = Bounds(row_bounds_area)
-                row_bounds_area.shrink(row.margin)
-                row_bounds_area.shrink(row.padding)
-                row_bounds_area.shrink(row.border)
 
                 col: Column # What if col is actually a Layout? E.g. sub sections
                 if len(row.columns)==0:
@@ -677,6 +757,8 @@ class Layout(Clickable):
                 )
                 if len(actual_cols) == 0:
                     continue
+
+
 
                 # bit of a hack to make sure face aren't the biggest things
                 col_left = row_bounds_area.left
@@ -698,6 +780,12 @@ class Layout(Clickable):
                     else:
                         col_bounds_area.width =  assigned_space + hole_size
                         hole_size = 0
+                        b = col.calc_minimum_bounds(col_bounds_area.width)
+                        if b.height > row_bounds_area.height:
+                            if self.orientation == 0:
+                                row_bounds_area.bottom = row_bounds_area.top + b.height
+                            else:
+                                row_bounds_area.top = row_bounds_area.bottom - b.height
 
                     col_left = col_bounds_area.right
 
@@ -738,6 +826,19 @@ class Layout(Clickable):
 
                     # TODO: Not sure yet if this is needed/helpful
                     # col.calc(client_id)
+
+                # TODO: Why are we using row.left etc, instead of just row.bounds?
+                row.left = row_bounds_area.left
+                row.top = row_bounds_area.top
+                row.right = row_bounds_area.right
+                row.bottom = row_bounds_area.bottom
+                row.width = row.right - row.left
+                row.height = row.bottom - row.top
+                
+                row.bounds = Bounds(row_bounds_area)
+                row_bounds_area.shrink(row.margin)
+                row_bounds_area.shrink(row.padding)
+                row_bounds_area.shrink(row.border)
 
     def calc_contents_min_bounds(self):
         """

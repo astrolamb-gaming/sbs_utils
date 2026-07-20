@@ -117,8 +117,21 @@ class Checkbox(Column):
         # default_width is None unless it has an actual value, in which case it is given that max width.
         max_width = available_width if available_width is not None else self.default_width
         
+        bounds_area = self.get_bounds_for_text(text)
+
+        # Checkbox uses up to 50px (or 6% of the screen, as far as I can tell)
+        # Checked at both default and fullscreen.
+        # If the height is less then 50px or 6%, then the checkbox itself has the same width as the height.
+
+        checkbox_width = min(bounds_area.height,6)
+
+        if max_width is None:
+            max_width = checkbox_width + bounds_area.width
+        else:
+            max_width = max_width - checkbox_width
         bounds_area = self.get_bounds_for_text(text, max_width)
         bounds_area.right += bounds_area.bottom # This adds space for the checkbox itself.
         bounds_area.grow(mb)
+        print(f"Checkbox:\n    {bounds_area}")
         return bounds_area
 
